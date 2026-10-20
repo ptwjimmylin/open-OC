@@ -7,7 +7,7 @@
     <!-- Bootstrap 5 CSS & FontAwesome Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS 用於匯出 Excel -->
+    <!-- SheetJS 匯出 Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -17,65 +17,80 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             font-size: 13px;
             background-color: var(--bg-slate);
             color: #334155;
-            padding: 20px;
+            padding: 15px;
+            margin: 0;
         }
 
         .app-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .app-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             color: var(--primary-blue);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
+        /* Stats Cards */
         .stat-card {
             background: #ffffff;
-            border-radius: 10px;
-            padding: 16px 20px;
+            border-radius: 8px;
+            padding: 12px 16px;
             border: 1px solid #e2e8f0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
         }
         .stat-title {
             font-size: 11px;
             font-weight: 700;
             color: #64748b;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
         .stat-value {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 700;
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
+        /* 表格容器與拉動 Scrollbar 設定 */
         .table-card {
             background: #ffffff;
-            border-radius: 10px;
-            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             overflow: hidden;
         }
 
+        /* 設定最大高度與寬度拉動條 (Horizontal & Vertical Scrollbar) */
         .sheet-container {
             overflow: auto;
-            max-height: 65vh;
+            max-height: 65vh; /* 垂直拉動軸 */
+            width: 100%;       /* 水平拉動軸 */
+        }
+
+        /* 客製化滾動條樣式，方便拖曳 */
+        .sheet-container::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+        .sheet-container::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 5px;
+        }
+        .sheet-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .sheet-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
         }
 
         .excel-table {
@@ -89,7 +104,7 @@
             background-color: #1e293b !important;
             color: #ffffff;
             font-weight: 600;
-            padding: 10px 12px;
+            padding: 8px 12px;
             position: sticky;
             top: 0;
             z-index: 10;
@@ -97,9 +112,9 @@
         }
 
         .excel-table td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #f1f5f9;
-            border-right: 1px solid #f8fafc;
+            padding: 7px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #f1f5f9;
             vertical-align: middle;
         }
 
@@ -107,35 +122,29 @@
             background-color: #f1f5f9 !important;
         }
 
+        /* 最新新增的行高亮效果 */
+        .row-newly-added {
+            animation: highlightFade 4s ease-out forwards;
+        }
+        @keyframes highlightFade {
+            0% { background-color: #fef08a !important; }
+            100% { background-color: #ffffff !important; }
+        }
+
+        /* 狀態標籤 */
         .badge-status {
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 3px 8px;
+            border-radius: 4px;
             font-weight: 600;
             font-size: 11px;
             display: inline-flex;
             align-items: center;
             gap: 4px;
         }
-        .badge-open {
-            background-color: #fef3c7;
-            color: #92400e;
-            border: 1px solid #fcd34d;
-        }
-        .badge-confirmed {
-            background-color: #e0f2fe;
-            color: #0369a1;
-            border: 1px solid #7dd3fc;
-        }
-        .badge-completed {
-            background-color: #dcfce7;
-            color: #166534;
-            border: 1px solid #86efac;
-        }
-        .badge-cancelled {
-            background-color: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fca5a5;
-        }
+        .badge-open { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .badge-confirmed { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+        .badge-completed { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .badge-cancelled { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 
         .row-cancelled td {
             background-color: #fafafa !important;
@@ -164,7 +173,7 @@
 </div>
 
 <!-- Dashboard 統計卡片 -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-3">
     <div class="col-md-3">
         <div class="stat-card">
             <div class="stat-title"><i class="fa-solid fa-list-check me-1"></i> 總筆數 (Total Items)</div>
@@ -179,7 +188,7 @@
     </div>
     <div class="col-md-3">
         <div class="stat-card" style="border-left: 4px solid #0284c7;">
-            <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 Order Confirm (OC)</div>
+            <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC (Confirmed)</div>
             <div class="stat-value text-info" id="statConfirmed">0</div>
         </div>
     </div>
@@ -191,30 +200,30 @@
     </div>
 </div>
 
-<!-- 搜尋與快速狀態篩選列 -->
-<div class="table-card p-3 mb-3">
+<!-- 搜尋與過濾選項列 -->
+<div class="table-card p-2 px-3 mb-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="btn-group btn-group-sm" role="group">
             <button type="button" class="btn btn-outline-secondary active" onclick="filterByStatus('ALL', this)">全部 (All)</button>
             <button type="button" class="btn btn-outline-warning" onclick="filterByStatus('OPEN', this)">🔥 僅看 Open</button>
-            <button type="button" class="btn btn-outline-info" onclick="filterByStatus('CONFIRMED', this)">☑️ 已有 OC</button>
+            <button type="button" class="btn btn-outline-info" onclick="filterByStatus('CONFIRMED', this)">☑️ 已做 OC</button>
             <button type="button" class="btn btn-outline-success" onclick="filterByStatus('COMPLETED', this)">✅ 已完成</button>
             <button type="button" class="btn btn-outline-danger" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
         </div>
 
         <div class="d-flex align-items-center gap-2">
-            <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 260px;" placeholder="🔍 搜尋 PO, OC, Customer...">
+            <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 250px;" placeholder="🔍 搜尋 PO, OC, Customer...">
         </div>
     </div>
 </div>
 
-<!-- 載入指示器 -->
+<!-- 載入顯示 -->
 <div id="loading" class="text-center my-5 p-5 bg-white rounded shadow-sm">
     <div class="spinner-border text-primary" role="status"></div>
-    <div class="mt-2 text-muted fw-bold">正從 Google Sheet 載入即時資料...</div>
+    <div class="mt-2 text-muted fw-bold">正同步 Google Sheet 資料...</div>
 </div>
 
-<!-- 資料表格 -->
+<!-- 資料表格區域 (包含滾動條 Scrollbar) -->
 <div class="table-card d-none" id="sheetContainer">
     <div class="sheet-container">
         <table class="excel-table">
@@ -235,7 +244,7 @@
             <div class="modal-body">
                 <form id="ocForm" class="row g-3">
                     <div class="col-md-3"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO" required></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO"></div>
                     <div class="col-md-3"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
                     <div class="col-md-3"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer"></div>
 
@@ -282,7 +291,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwGoTmhYErmY7ohK7tsEFDWN99AufBPi5-88Wktu1pg_ScILwHWmKfjIfqjlYplVgk6fg/exec";
+    // 網址已配置為您專屬的 Apps Script URL
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyj-ltAOFyUdKnpfo7qNE9WzUAgQWdAv51pLqV434_sh18BdKSLBwPKNc6UJii6r21ubg/exec";
 
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
@@ -293,6 +303,7 @@
 
     let globalData = [];
     let activeFilter = 'ALL';
+    let newlyAddedRow = null;
 
     async function loadData() {
         try {
@@ -307,7 +318,7 @@
             document.getElementById('sheetContainer').classList.remove('d-none');
         } catch (err) {
             console.error(err);
-            document.getElementById('loading').innerHTML = `<div class="text-danger fw-bold">❌ 載入失敗，請確認 API URL 與 Apps Script 存取權限。</div>`;
+            document.getElementById('loading').innerHTML = `<div class="text-danger fw-bold">❌ 載入失敗，請確認 Apps Script 已重新發布新版本並開放「所有人」。</div>`;
         }
     }
 
@@ -321,9 +332,7 @@
             const ocVal = String(row["OC"] || row["OC#"] || "").trim();
             const amt = parseFloat(row["Amount"]) || 0;
 
-            if (ocVal !== "") {
-                confirmedCount++;
-            }
+            if (ocVal !== "") confirmedCount++;
 
             if (status !== 'completed' && status !== 'cancelled') {
                 openCount++;
@@ -353,6 +362,11 @@
 
             if (statusLower === 'cancelled') {
                 tr.classList.add('row-cancelled');
+            }
+
+            // 若是剛剛成功新增的資料，加入高亮效果
+            if (newlyAddedRow && row["PO"] === newlyAddedRow["PO"] && row["Date"] === newlyAddedRow["Date"]) {
+                tr.classList.add('row-newly-added');
             }
 
             let rowHtml = '';
@@ -422,33 +436,52 @@
         document.getElementById('input_Amount').value = (qty * price).toFixed(2);
     }
 
+    // 徹底修復的寫入函數 (利用 GET query 傳參避開 CORS 阻擋)
     async function submitOCData() {
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 寫入中...`;
 
-        const formParams = new URLSearchParams();
+        const payload = { action: "add" };
         columns.forEach(col => {
             const el = document.getElementById(`input_${col}`);
-            formParams.append(col, el ? el.value : "");
+            payload[col] = el ? el.value : "";
         });
 
+        // 轉換為 URL parameters
+        const queryParams = new URLSearchParams(payload).toString();
+
         try {
-            await fetch(GAS_API_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formParams
+            const res = await fetch(`${GAS_API_URL}?${queryParams}`, {
+                method: 'GET',
+                redirect: 'follow'
             });
 
-            alert('✅ 新 OC 資料已成功儲存至 Google Sheet！');
-            document.getElementById('ocForm').reset();
-            
-            const modalEl = document.getElementById('addOcModal');
-            const modalObj = bootstrap.Modal.getInstance(modalEl);
-            if (modalObj) modalObj.hide();
+            const result = await res.json();
 
-            loadData();
+            if (result.result === "success") {
+                alert('✅ 新 OC 資料已成功寫入至 Google Sheet！');
+                
+                // 記錄新寫入的行，並將其插在本地資料庫最前方
+                newlyAddedRow = payload;
+                globalData.unshift(payload); 
+
+                // 即時刷新 Dashboard 與表格
+                updateDashboard();
+                applyFilters();
+
+                // 關閉 Modal 並清空表單
+                document.getElementById('ocForm').reset();
+                const modalEl = document.getElementById('addOcModal');
+                const modalObj = bootstrap.Modal.getInstance(modalEl);
+                if (modalObj) modalObj.hide();
+
+                // 滾動回到表格最頂端
+                document.querySelector('.sheet-container').scrollTop = 0;
+            } else {
+                throw new Error(result.error || "寫入失敗");
+            }
+
         } catch (err) {
             alert('❌ 儲存失敗: ' + err.message);
         } finally {
