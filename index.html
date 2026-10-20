@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>2026 PTW TW_Open OC & PO Tracker</title>
-    <!-- 引入 Bootstrap 5 CSS -->
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SheetJS 用於匯出 Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: Arial, "Microsoft JhengHei", sans-serif;
@@ -37,7 +39,7 @@
 
         .sheet-container {
             overflow: auto;
-            max-height: 80vh;
+            max-height: 78vh;
             background: #ffffff;
             border: 1px solid #d1d5db;
             border-radius: 6px;
@@ -56,7 +58,6 @@
             vertical-align: middle;
         }
 
-        /* 擬真淡藍色表頭 (固定頂部) */
         .excel-table th {
             background-color: #D9E1F2 !important;
             color: #1f2937;
@@ -72,7 +73,6 @@
             background-color: #f1f5f9;
         }
 
-        /* Cancelled 狀態紅底加劃線 */
         .row-cancelled {
             background-color: #f8d7da !important;
             color: #842029 !important;
@@ -96,8 +96,20 @@
 
 <div class="toolbar">
     <h1 class="toolbar-title">📊 2026 PTW TW_Open OC & PO Tracker</h1>
-    <div class="d-flex align-items-center gap-2">
-        <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 280px;" placeholder="🔍 搜尋 PO, Customer, Supplier...">
+    
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 220px;" placeholder="🔍 搜尋 PO, Customer...">
+        
+        <!-- 新增資料按鈕 -->
+        <button class="btn btn-sm btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#addDataModal">
+            ➕ 新增資料
+        </button>
+        
+        <!-- 匯出 Excel 按鈕 -->
+        <button class="btn btn-sm btn-outline-primary fw-bold" onclick="exportToExcel()">
+            📥 Export Excel
+        </button>
+
         <span id="dataCount" class="badge bg-primary">0 筆資料</span>
     </div>
 </div>
@@ -108,7 +120,7 @@
 </div>
 
 <div class="sheet-container d-none" id="sheetContainer">
-    <table class="excel-table">
+    <table class="excel-table" id="dataTable">
         <thead>
             <tr id="tableHeader"></tr>
         </thead>
@@ -116,11 +128,33 @@
     </table>
 </div>
 
-<script>
-    // ⚠️ 請將下方雙引號內的網址替換為您從 Google Apps Script 複製的 Web App URL ⚠️
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzaiqzWkcKmMSanWK5bjco3Vd8roEDK-_IZQJlnwgGLsFHVLYvzNZGYOOJvtAru8ny1tg/exec";
+<!-- 新增資料彈出視窗 (Modal) -->
+<div class="modal fade" id="addDataModal" tabindex="-1" aria-labelledby="addDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="addDataModalLabel">➕ 新增資料項目</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addForm" class="row g-3">
+                    <!-- 動態表單生成位置 -->
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitData()" id="submitBtn">提交至 Google Sheet</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-    // 您的 22 個指定欄位
+<!-- Bootstrap 5 JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwJcwgLKsPef3Hbt8FtK--3HEV6U28U4lZWTC9Rh5puC8fyiZQLVLC8Wf_D-gbjc29SDg/exec";
+
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
         "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
@@ -129,41 +163,32 @@
     ];
 
     let globalData = [];
+    let currentFilteredData = [];
 
     async function fetchData() {
         try {
-            // 使用 redirect: 'follow' 處理 Google Apps Script 轉址問題
             const response = await fetch(GAS_API_URL, {
                 method: 'GET',
                 redirect: 'follow'
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
-            }
-
             globalData = await response.json();
 
-            if (globalData.error) {
-                throw new Error(globalData.error);
-            }
+            if (globalData.error) throw new Error(globalData.error);
 
+            currentFilteredData = [...globalData];
             renderHeader();
             renderTableRows(globalData);
+            generateFormInputs();
 
             document.getElementById('loading').classList.add('d-none');
             document.getElementById('sheetContainer').classList.remove('d-none');
             document.getElementById('dataCount').innerText = `${globalData.length} 筆資料`;
         } catch (err) {
-            console.error("讀取失敗細節:", err);
+            console.error(err);
             document.getElementById('loading').innerHTML = `
-                <div class="text-danger fw-bold fs-5">❌ 資料讀取失敗</div>
-                <div class="text-muted text-sm mt-2">
-                    常見原因與解決方法：<br>
-                    1. <strong>權限未開放：</strong> 請回到 Apps Script 點擊「部署」>「管理部署」，確認<strong>「誰可以存取 (Who has access)」</strong>設為<strong>「所有人 (Anyone)」</strong>。<br>
-                    2. <strong>未發布新版本：</strong> 修改 Apps Script 程式碼後，必須選擇「建立新版本 (New Version)」再部署才會生效。<br>
-                    3. <strong>網址貼錯：</strong> 網址必須以 <code>https://script.google.com/macros/s/.../exec</code> 結尾。
-                </div>
+                <div class="text-danger fw-bold">❌ 資料讀取失敗</div>
+                <div class="text-muted text-sm mt-1">請確認 Apps Script 部署設定為「所有人 (Anyone)」。</div>
             `;
         }
     }
@@ -179,18 +204,15 @@
 
         data.forEach(row => {
             const tr = document.createElement('tr');
-
-            // 判斷 Status 是否為 Cancelled
-            const statusVal = String(row["Status"] || row["Status "] || "").trim().toLowerCase();
+            const statusVal = String(row["Status"] || "").trim().toLowerCase();
             if (statusVal === "cancelled") {
                 tr.classList.add('row-cancelled');
             }
 
             let rowHtml = '';
             columns.forEach(col => {
-                let cellVal = row[col] !== undefined ? row[col] : (row[col + " "] || '');
+                let cellVal = row[col] !== undefined ? row[col] : '';
 
-                // 處理日期格式 (移除時間字串)
                 if (typeof cellVal === 'string' && cellVal.includes('T') && cellVal.includes('Z')) {
                     const dateObj = new Date(cellVal);
                     if (!isNaN(dateObj.getTime())) {
@@ -198,7 +220,6 @@
                     }
                 }
 
-                // 數字欄位靠右對齊
                 const isNumericCol = ['QTY', 'Unit Price', 'Amount'].includes(col);
                 const alignClass = isNumericCol ? 'text-right' : '';
 
@@ -214,16 +235,91 @@
         });
     }
 
-    // 關鍵字搜尋功能
+    // 動態產生新增表單輸入框
+    function generateFormInputs() {
+        const form = document.getElementById('addForm');
+        form.innerHTML = '';
+
+        columns.forEach(col => {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'col-md-6';
+
+            let inputType = 'text';
+            if (col.includes('Date')) inputType = 'date';
+            if (['QTY', 'Unit Price', 'Amount'].includes(col)) inputType = 'number';
+
+            colDiv.innerHTML = `
+                <label class="form-label fw-bold mb-1">${col}</label>
+                <input type="${inputType}" class="form-control form-control-sm" id="input_${col}" name="${col}">
+            `;
+            form.appendChild(colDiv);
+        });
+    }
+
+    // 提交新資料回 Google Sheet
+    async function submitData() {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerText = '提交中...';
+
+        const payload = {};
+        columns.forEach(col => {
+            const val = document.getElementById(`input_${col}`).value;
+            payload[col] = val;
+        });
+
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors', // 避開 GAS CORS 限制
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            alert('✅ 資料已提交！頁面將自動重新載入。');
+            
+            // 清空表單並關閉 Modal
+            document.getElementById('addForm').reset();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addDataModal'));
+            modal.hide();
+
+            // 重新讀取最新資料
+            fetchData();
+        } catch (err) {
+            alert('❌ 提交失敗: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = '提交至 Google Sheet';
+        }
+    }
+
+    // 匯出 Excel 功能
+    function exportToExcel() {
+        if (!currentFilteredData || currentFilteredData.length === 0) {
+            alert('沒有資料可供匯出');
+            return;
+        }
+
+        // 轉換為 Excel 格式資料
+        const worksheet = XLSX.utils.json_to_sheet(currentFilteredData, { header: columns });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "PO & OC Data");
+
+        // 匯出檔案
+        const filename = `PO_OC_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(workbook, filename);
+    }
+
+    // 即時搜尋過濾
     document.getElementById('searchInput').addEventListener('input', function(e) {
         const keyword = e.target.value.toLowerCase().trim();
-        const filteredData = globalData.filter(row => {
+        currentFilteredData = globalData.filter(row => {
             return Object.values(row).some(val => 
                 String(val).toLowerCase().includes(keyword)
             );
         });
-        renderTableRows(filteredData);
-        document.getElementById('dataCount').innerText = `${filteredData.length} 筆資料`;
+        renderTableRows(currentFilteredData);
+        document.getElementById('dataCount').innerText = `${currentFilteredData.length} 筆資料`;
     });
 
     fetchData();
