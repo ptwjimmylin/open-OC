@@ -41,14 +41,30 @@
             gap: 8px;
         }
 
-        /* Stats Cards */
-        .stat-card {
+        /* 可點擊互動的 Dashboard 按鈕卡片 */
+        .stat-card-btn {
             background: #ffffff;
             border-radius: 8px;
             padding: 12px 16px;
-            border: 1px solid #e2e8f0;
+            border: 2px solid #e2e8f0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            user-select: none;
+            width: 100%;
+            text-align: left;
         }
+        .stat-card-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #94a3b8;
+        }
+        .stat-card-btn.active {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+            border-color: #2563eb !important;
+            background-color: #f0f9ff;
+        }
+
         .stat-title {
             font-size: 11px;
             font-weight: 700;
@@ -61,7 +77,7 @@
             margin-top: 2px;
         }
 
-        /* 表格容器與拉動 Scrollbar 設定 */
+        /* 表格容器與雙向拉動 Scrollbar */
         .table-card {
             background: #ffffff;
             border-radius: 8px;
@@ -154,6 +170,9 @@
 </head>
 <body>
 
+<!-- 隱藏式 iframe：用於無阻擋非同步表單寫入 -->
+<iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="if(submitted){onPostSuccess();}"></iframe>
+
 <div class="app-header">
     <div class="app-title">
         <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
@@ -170,28 +189,28 @@
     </div>
 </div>
 
-<!-- Dashboard 統計卡片 -->
+<!-- 📊 Dashboard 可點擊按鈕卡片 -->
 <div class="row g-3 mb-3">
     <div class="col-md-3">
-        <div class="stat-card">
+        <button class="stat-card-btn active" id="btnDashALL" onclick="filterByStatus('ALL', this)">
             <div class="stat-title"><i class="fa-solid fa-list-check me-1"></i> 總筆數 (Total Items)</div>
             <div class="stat-value text-dark" id="statTotal">0</div>
-        </div>
+        </button>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 4px solid #f59e0b;">
-            <div class="stat-title"><i class="fa-solid fa-clock me-1 text-warning"></i> Open (未結案)</div>
+        <button class="stat-card-btn" id="btnDashOPEN" style="border-left: 5px solid #f59e0b;" onclick="filterByStatus('OPEN', this)">
+            <div class="stat-title"><i class="fa-solid fa-clock me-1 text-warning"></i> Open 未結案 (點擊篩選)</div>
             <div class="stat-value text-warning" id="statOpen">0</div>
-        </div>
+        </button>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 4px solid #0284c7;">
-            <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC (Confirmed)</div>
+        <button class="stat-card-btn" id="btnDashCONFIRMED" style="border-left: 5px solid #0284c7;" onclick="filterByStatus('CONFIRMED', this)">
+            <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC (點擊篩選)</div>
             <div class="stat-value text-info" id="statConfirmed">0</div>
-        </div>
+        </button>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 4px solid #10b981;">
+        <div class="stat-card-btn" style="border-left: 5px solid #10b981; cursor: default;">
             <div class="stat-title"><i class="fa-solid fa-dollar-sign me-1 text-success"></i> Open 未結案金額 (USD)</div>
             <div class="stat-value text-success" id="statOpenAmount">$0</div>
         </div>
@@ -202,11 +221,11 @@
 <div class="table-card p-2 px-3 mb-3">
     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-secondary active" onclick="filterByStatus('ALL', this)">全部 (All)</button>
-            <button type="button" class="btn btn-outline-warning" onclick="filterByStatus('OPEN', this)">🔥 僅看 Open</button>
-            <button type="button" class="btn btn-outline-info" onclick="filterByStatus('CONFIRMED', this)">☑️ 已做 OC</button>
-            <button type="button" class="btn btn-outline-success" onclick="filterByStatus('COMPLETED', this)">✅ 已完成</button>
-            <button type="button" class="btn btn-outline-danger" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
+            <button type="button" class="btn btn-outline-secondary active" id="btnFilterALL" onclick="filterByStatus('ALL', this)">全部 (All)</button>
+            <button type="button" class="btn btn-outline-warning" id="btnFilterOPEN" onclick="filterByStatus('OPEN', this)">🔥 僅看 Open</button>
+            <button type="button" class="btn btn-outline-info" id="btnFilterCONFIRMED" onclick="filterByStatus('CONFIRMED', this)">☑️ 已做 OC</button>
+            <button type="button" class="btn btn-outline-success" id="btnFilterCOMPLETED" onclick="filterByStatus('COMPLETED', this)">✅ 已完成</button>
+            <button type="button" class="btn btn-outline-danger" id="btnFilterCANCELLED" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
         </div>
 
         <div class="d-flex align-items-center gap-2">
@@ -215,7 +234,7 @@
     </div>
 </div>
 
-<!-- 資料表格區域 -->
+<!-- 資料表格區域 (雙向拖曳軸) -->
 <div class="table-card" id="sheetContainer">
     <div class="sheet-container">
         <table class="excel-table">
@@ -234,45 +253,48 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="ocForm" class="row g-3">
-                    <div class="col-md-3"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer"></div>
+                <!-- 原生 Form 提交至隱藏 iframe，徹底避開 CORS 阻擋 -->
+                <form id="ocForm" action="https://script.google.com/macros/s/AKfycbzaiqzWkcKmMSanWK5bjco3Vd8roEDK-_IZQJlnwgGLsFHVLYvzNZGYOOJvtAru8ny1tg/exec" method="POST" target="hidden_iframe" class="row g-3">
+                    <input type="hidden" name="action" value="add">
 
-                    <div class="col-md-3"><label class="form-label fw-bold">Customer PO#</label><input type="text" class="form-control form-control-sm" id="input_Customer PO"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold text-primary">OC# (Confirm 號碼)</label><input type="text" class="form-control form-control-sm border-primary" id="input_OC" placeholder="輸入 OC 號碼"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Cus. Region</label><input type="text" class="form-control form-control-sm" id="input_Cus. Region" value="TW"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date" name="Date"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO" name="PO"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier" name="Supplier"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer" name="Customer"></div>
+
+                    <div class="col-md-3"><label class="form-label fw-bold">Customer PO#</label><input type="text" class="form-control form-control-sm" id="input_Customer PO" name="Customer PO"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold text-primary">OC# (Confirm 號碼)</label><input type="text" class="form-control form-control-sm border-primary" id="input_OC" name="OC" placeholder="輸入 OC 號碼"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Cus. Region</label><input type="text" class="form-control form-control-sm" id="input_Cus. Region" name="Cus. Region" value="TW"></div>
                     <div class="col-md-3"><label class="form-label fw-bold">Status</label>
-                        <select class="form-select form-select-sm" id="input_Status">
+                        <select class="form-select form-select-sm" id="input_Status" name="Status">
                             <option value="Open">Open</option>
                             <option value="Completed">Completed</option>
                             <option value="Cancelled">Cancelled</option>
                         </select>
                     </div>
 
-                    <div class="col-md-6"><label class="form-label fw-bold">Description</label><input type="text" class="form-control form-control-sm" id="input_Description"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">QTY</label><input type="number" class="form-control form-control-sm" id="input_QTY" value="1" oninput="calcAmount()"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">ETA</label><input type="date" class="form-control form-control-sm" id="input_ETA"></div>
+                    <div class="col-md-6"><label class="form-label fw-bold">Description</label><input type="text" class="form-control form-control-sm" id="input_Description" name="Description"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">QTY</label><input type="number" class="form-control form-control-sm" id="input_QTY" name="QTY" value="1" oninput="calcAmount()"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">ETA</label><input type="date" class="form-control form-control-sm" id="input_ETA" name="ETA"></div>
 
-                    <div class="col-md-2"><label class="form-label fw-bold">Inco-terms</label><input type="text" class="form-control form-control-sm" id="input_Inco-terms" value="EXW"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Currency</label><input type="text" class="form-control form-control-sm" id="input_Currency" value="USD"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Unit Price</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Unit Price" oninput="calcAmount()"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Amount</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Amount"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Created by</label><input type="text" class="form-control form-control-sm" id="input_Created by"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Inco-terms</label><input type="text" class="form-control form-control-sm" id="input_Inco-terms" name="Inco-terms" value="EXW"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Currency</label><input type="text" class="form-control form-control-sm" id="input_Currency" name="Currency" value="USD"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Unit Price</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Unit Price" name="Unit Price" oninput="calcAmount()"></div>
+                    <div class="col-md-3"><label class="form-label fw-bold">Amount</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Amount" name="Amount"></div>
+                    <div class="col-md-2"><label class="form-label fw-bold">Created by</label><input type="text" class="form-control form-control-sm" id="input_Created by" name="Created by"></div>
 
-                    <div class="col-md-4"><label class="form-label fw-bold">Remark</label><input type="text" class="form-control form-control-sm" id="input_Remark"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Goods Received Date</label><input type="date" class="form-control form-control-sm" id="input_Goods Received Date"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Inv Date</label><input type="date" class="form-control form-control-sm" id="input_Inv Date"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Remark</label><input type="text" class="form-control form-control-sm" id="input_Remark" name="Remark"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Goods Received Date</label><input type="date" class="form-control form-control-sm" id="input_Goods Received Date" name="Goods Received Date"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Inv Date</label><input type="date" class="form-control form-control-sm" id="input_Inv Date" name="Inv Date"></div>
 
-                    <div class="col-md-4"><label class="form-label fw-bold">Supplier Inv</label><input type="text" class="form-control form-control-sm" id="input_Supplier Inv"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Payment Terms</label><input type="text" class="form-control form-control-sm" id="input_Payment Terms"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Received Cus Exchg Parts</label><input type="text" class="form-control form-control-sm" id="input_Received Cus Exchg Parts"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Supplier Inv</label><input type="text" class="form-control form-control-sm" id="input_Supplier Inv" name="Supplier Inv"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Payment Terms</label><input type="text" class="form-control form-control-sm" id="input_Payment Terms" name="Payment Terms"></div>
+                    <div class="col-md-4"><label class="form-label fw-bold">Received Cus Exchg Parts</label><input type="text" class="form-control form-control-sm" id="input_Received Cus Exchg Parts" name="Received Cus Exchg Parts"></div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary btn-sm px-4 fw-bold" onclick="submitOCData()" id="submitBtn">
+                <button type="button" class="btn btn-primary btn-sm px-4 fw-bold" onclick="submitOCForm()" id="submitBtn">
                     <i class="fa-solid fa-cloud-arrow-up me-1"></i> 寫入至 Google Sheet
                 </button>
             </div>
@@ -295,217 +317,8 @@
     let globalData = [];
     let activeFilter = 'ALL';
     let newlyAddedRow = null;
+    let submitted = false;
 
-    // 頁面初始化：先讀取本地快取（秒開網頁）
+    // 快取秒開頁面
     function initApp() {
-        renderHeader();
-        const cached = localStorage.getItem("oc_cache_data");
-        if (cached) {
-            try {
-                globalData = JSON.parse(cached);
-                updateDashboard();
-                renderRows(globalData);
-            } catch (e) {}
-        }
-        // 背景向 Google Sheet 抓最新資料
-        fetchLatestData();
-    }
-
-    async function fetchLatestData() {
-        const syncStatus = document.getElementById('syncStatus');
-        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 同步中...`;
-
-        try {
-            const res = await fetch(GAS_API_URL, { method: 'GET', redirect: 'follow' });
-            const data = await res.json();
-
-            if (Array.isArray(data)) {
-                globalData = data;
-                // 更新快取
-                localStorage.setItem("oc_cache_data", JSON.stringify(data));
-                
-                updateDashboard();
-                applyFilters();
-                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已最新`;
-            }
-        } catch (err) {
-            console.error(err);
-            syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-triangle-exclamation"></i> 同步失敗</span>`;
-        }
-    }
-
-    function updateDashboard() {
-        let openCount = 0;
-        let confirmedCount = 0;
-        let openAmount = 0;
-
-        globalData.forEach(row => {
-            const status = String(row["Status"] || "").trim().toLowerCase();
-            const ocVal = String(row["OC"] || row["OC#"] || "").trim();
-            const amt = parseFloat(row["Amount"]) || 0;
-
-            if (ocVal !== "") confirmedCount++;
-
-            if (status !== 'completed' && status !== 'cancelled') {
-                openCount++;
-                openAmount += amt;
-            }
-        });
-
-        document.getElementById('statTotal').innerText = globalData.length;
-        document.getElementById('statOpen').innerText = openCount;
-        document.getElementById('statConfirmed').innerText = confirmedCount;
-        document.getElementById('statOpenAmount').innerText = '$' + openAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
-    }
-
-    function renderHeader() {
-        document.getElementById('tableHeader').innerHTML = columns.map(c => `<th>${c}</th>`).join('');
-    }
-
-    function renderRows(data) {
-        const tbody = document.getElementById('tableBody');
-        tbody.innerHTML = '';
-
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            const rawStatus = String(row["Status"] || "").trim();
-            const statusLower = rawStatus.toLowerCase();
-            const ocVal = String(row["OC"] || row["OC#"] || "").trim();
-
-            if (statusLower === 'cancelled') {
-                tr.classList.add('row-cancelled');
-            }
-
-            if (newlyAddedRow && row["PO"] === newlyAddedRow["PO"] && row["Date"] === newlyAddedRow["Date"]) {
-                tr.classList.add('row-newly-added');
-            }
-
-            let rowHtml = '';
-            columns.forEach(col => {
-                let val = row[col] !== undefined ? row[col] : '';
-
-                if (typeof val === 'string' && val.includes('T') && val.includes('Z')) {
-                    val = val.split('T')[0];
-                }
-
-                if (col === 'Status') {
-                    if (statusLower === 'completed') {
-                        val = `<span class="badge-status badge-completed"><i class="fa-solid fa-check me-1"></i>Completed</span>`;
-                    } else if (statusLower === 'cancelled') {
-                        val = `<span class="badge-status badge-cancelled"><i class="fa-solid fa-xmark me-1"></i>Cancelled</span>`;
-                    } else if (ocVal !== '') {
-                        val = `<span class="badge-status badge-confirmed"><i class="fa-solid fa-file-circle-check me-1"></i>OC Confirmed</span>`;
-                    } else {
-                        val = `<span class="badge-status badge-open"><i class="fa-solid fa-clock me-1"></i>Open</span>`;
-                    }
-                }
-
-                const isNumeric = ['QTY', 'Unit Price', 'Amount'].includes(col);
-                if (isNumeric && typeof val === 'number') {
-                    val = val.toLocaleString();
-                }
-
-                rowHtml += `<td class="${isNumeric ? 'text-right' : ''}">${val}</td>`;
-            });
-
-            tr.innerHTML = rowHtml;
-            tbody.appendChild(tr);
-        });
-    }
-
-    function filterByStatus(type, btn) {
-        activeFilter = type;
-        document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        applyFilters();
-    }
-
-    function applyFilters() {
-        const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
-
-        const filtered = globalData.filter(row => {
-            const rawStatus = String(row["Status"] || "").trim().toLowerCase();
-            const ocVal = String(row["OC"] || row["OC#"] || "").trim();
-            
-            let matchesStatus = true;
-            if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
-            if (activeFilter === 'CONFIRMED') matchesStatus = (ocVal !== "");
-            if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
-            if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
-
-            let matchesKeyword = Object.values(row).some(v => String(v).toLowerCase().includes(keyword));
-
-            return matchesStatus && matchesKeyword;
-        });
-
-        renderRows(filtered);
-    }
-
-    function calcAmount() {
-        const qty = parseFloat(document.getElementById('input_QTY').value) || 0;
-        const price = parseFloat(document.getElementById('input_Unit Price').value) || 0;
-        document.getElementById('input_Amount').value = (qty * price).toFixed(2);
-    }
-
-    async function submitOCData() {
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 寫入中...`;
-
-        const payload = { action: "add" };
-        columns.forEach(col => {
-            const el = document.getElementById(`input_${col}`);
-            payload[col] = el ? el.value : "";
-        });
-
-        const queryParams = new URLSearchParams(payload).toString();
-
-        try {
-            const res = await fetch(`${GAS_API_URL}?${queryParams}`, {
-                method: 'GET',
-                redirect: 'follow'
-            });
-
-            const result = await res.json();
-
-            if (result.result === "success") {
-                alert('✅ 新 OC 資料已成功寫入至 Google Sheet！');
-                
-                newlyAddedRow = payload;
-                globalData.unshift(payload); 
-                localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
-
-                updateDashboard();
-                applyFilters();
-
-                document.getElementById('ocForm').reset();
-                const modalEl = document.getElementById('addOcModal');
-                const modalObj = bootstrap.Modal.getInstance(modalEl);
-                if (modalObj) modalObj.hide();
-
-                document.querySelector('.sheet-container').scrollTop = 0;
-            } else {
-                throw new Error(result.error || "寫入失敗");
-            }
-
-        } catch (err) {
-            alert('❌ 儲存失敗: ' + err.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> 寫入至 Google Sheet`;
-        }
-    }
-
-    function exportToExcel() {
-        const worksheet = XLSX.utils.json_to_sheet(globalData, { header: columns });
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "OC Data");
-        XLSX.writeFile(workbook, `OC_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-    }
-
-    document.getElementById('searchInput').addEventListener('input', applyFilters);
-
-    initApp();
-</script>
-</body>
-</html>
+        renderHeader
