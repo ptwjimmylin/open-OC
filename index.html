@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 PTW TW_Open OC & PO Tracker</title>
+    <!-- 引入 Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, "Microsoft JhengHei", "Segoe UI", sans-serif;
+            font-size: 13px;
+            background-color: #f4f6f9;
+            padding: 15px;
+            margin: 0;
+        }
+
+        /* 頂部工具列 */
+        .toolbar {
+            background-color: #ffffff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .toolbar-title {
+            color: #1f4e78;
+            font-weight: bold;
+            font-size: 16px;
+            margin: 0;
+        }
+
+        /* 試算表風格容器 */
+        .sheet-container {
+            overflow: auto;
+            max-height: 80vh;
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+
+        .excel-table {
+            border-collapse: collapse;
+            width: 100%;
+            white-space: nowrap;
+        }
+
+        .excel-table th, .excel-table td {
+            border: 1px solid #e5e7eb;
+            padding: 6px 10px;
+            vertical-align: middle;
+        }
+
+        /* 淡藍色試算表表頭 (凍結頂部) */
+        .excel-table th {
+            background-color: #D9E1F2 !important;
+            color: #1f2937;
+            font-weight: 700;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid #b0c4de;
+        }
+
+        /* 列次滑過效果 */
+        .excel-table tbody tr:hover {
+            background-color: #f1f5f9;
+        }
+
+        /* 取消狀態 (Cancelled)：整列紅底 + 劃線 */
+        .row-cancelled {
+            background-color: #f8d7da !important;
+            color: #842029 !important;
+            text-decoration: line-through;
+        }
+        .row-cancelled td {
+            background-color: #f8d7da !important;
+        }
+
+        /* 文字與數字對齊設定 */
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* 載入中動畫遮罩 */
+        .loading-box {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body>
+
+<!-- 工具列區域 -->
+<div class="toolbar">
+    <h1 class="toolbar-title">📊 2026 PTW TW_Open OC & PO Tracker</h1>
+    <div class="d-flex align-items-center gap-2">
+        <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 280px;" placeholder="🔍 搜尋 PO, Customer, Supplier...">
+        <span id="dataCount" class="badge bg-primary">0 筆資料</span>
+    </div>
+</div>
+
+<!-- 載入狀態 -->
+<div id="loading" class="text-center my-5 loading-box">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="mt-2 text-muted fw-bold">正從 Google Sheets 載入即時資料...</div>
+</div>
+
+<!-- 資料表格區域 -->
+<div class="sheet-container d-none" id="sheetContainer">
+    <table class="excel-table">
+        <thead>
+            <tr id="tableHeader"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    // ⚠️ 請替換為您部署後獲得的 Google Apps Script Web App URL ⚠️
+    const GAS_API_URL = "https://script.google.com/macros/s/您的部署ID/exec";
+
+    // 您指定的 22 個欄位
+    const columns = [
+        "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
+        "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
+        "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
+        "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
+    ];
+
+    let globalData = [];
+
+    // 取得資料
+    async function fetchData() {
+        try {
+            const response = await fetch(GAS_API_URL);
+            globalData = await response.json();
+
+            if (globalData.error) {
+                throw new Error(globalData.error);
+            }
+
+            renderHeader();
+            renderTableRows(globalData);
+
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('sheetContainer').classList.remove('d-none');
+            document.getElementById('dataCount').innerText = `${globalData.length} 筆資料`;
+        } catch (err) {
+            console.error("載入失敗:", err);
+            document.getElementById('loading').innerHTML = `
+                <div class="text-danger fw-bold">❌ 資料讀取失敗</div>
+                <div class="text-muted text-sm mt-1">請檢查 Google Apps Script 權限是否設為「所有人 (Anyone)」，或確認 API 網址是否正確。</div>
+            `;
+        }
+    }
+
+    // 渲染表頭
+    function renderHeader() {
+        const headerRow = document.getElementById('tableHeader');
+        headerRow.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
+    }
+
+    // 渲染表格內容
+    function renderTableRows(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+
+            // 判斷 Status 是否為 Cancelled
+            const statusVal = String(row["Status"] || row["Status "] || "").trim().toLowerCase();
+            if (statusVal === "cancelled") {
+                tr.classList.add('row-cancelled');
+            }
+
+            let rowHtml = '';
+            columns.forEach(col => {
+                // 處理欄位對應（相容欄位開頭結尾空格問題）
+                let cellVal = row[col] !== undefined ? row[col] : (row[col + " "] || '');
+
+                // 日期格式優化 (移除 ISO 時間字串如 T16:00:00.000Z)
+                if (typeof cellVal === 'string' && cellVal.includes('T')) {
+                    const dateObj = new Date(cellVal);
+                    if (!isNaN(dateObj.getTime())) {
+                        cellVal = cellVal.split('T')[0];
+                    }
+                }
+
+                // 金額/數量 數值對齊處理
+                const isNumericCol = ['QTY', 'Unit Price', 'Amount'].includes(col);
+                const alignClass = isNumericCol ? 'text-right' : '';
+
+                // 如果是金額/單價，格式化數字（範例：千分位加逗號）
+                if (isNumericCol && typeof cellVal === 'number') {
+                    cellVal = cellVal.toLocaleString();
+                }
+
+                rowHtml += `<td class="${alignClass}">${cellVal}</td>`;
+            });
+
+            tr.innerHTML = rowHtml;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 前端即時搜尋過濾
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const keyword = e.target.value.toLowerCase().trim();
+        const filteredData = globalData.filter(row => {
+            return Object.values(row).some(val => 
+                String(val).toLowerCase().includes(keyword)
+            );
+        });
+        renderTableRows(filteredData);
+        document.getElementById('dataCount').innerText = `${filteredData.length} 筆資料`;
+    });
+
+    // 頁面初次開啟時執行
+    fetchData();
+</script>
+
+</body>
+</html>
