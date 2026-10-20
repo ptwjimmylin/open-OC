@@ -8,14 +8,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, "Microsoft JhengHei", "Segoe UI", sans-serif;
+            font-family: Arial, "Microsoft JhengHei", sans-serif;
             font-size: 13px;
             background-color: #f4f6f9;
             padding: 15px;
             margin: 0;
         }
 
-        /* 頂部工具列 */
         .toolbar {
             background-color: #ffffff;
             padding: 12px 20px;
@@ -36,7 +35,6 @@
             margin: 0;
         }
 
-        /* 試算表風格容器 */
         .sheet-container {
             overflow: auto;
             max-height: 80vh;
@@ -58,7 +56,7 @@
             vertical-align: middle;
         }
 
-        /* 淡藍色試算表表頭 (凍結頂部) */
+        /* 擬真淡藍色表頭 (固定頂部) */
         .excel-table th {
             background-color: #D9E1F2 !important;
             color: #1f2937;
@@ -70,12 +68,11 @@
             border-bottom: 2px solid #b0c4de;
         }
 
-        /* 列次滑過效果 */
         .excel-table tbody tr:hover {
             background-color: #f1f5f9;
         }
 
-        /* 取消狀態 (Cancelled)：整列紅底 + 劃線 */
+        /* Cancelled 狀態紅底加劃線 */
         .row-cancelled {
             background-color: #f8d7da !important;
             color: #842029 !important;
@@ -85,11 +82,8 @@
             background-color: #f8d7da !important;
         }
 
-        /* 文字與數字對齊設定 */
         .text-right { text-align: right; }
-        .text-center { text-align: center; }
 
-        /* 載入中動畫遮罩 */
         .loading-box {
             background: #ffffff;
             padding: 30px;
@@ -100,7 +94,6 @@
 </head>
 <body>
 
-<!-- 工具列區域 -->
 <div class="toolbar">
     <h1 class="toolbar-title">📊 2026 PTW TW_Open OC & PO Tracker</h1>
     <div class="d-flex align-items-center gap-2">
@@ -109,13 +102,11 @@
     </div>
 </div>
 
-<!-- 載入狀態 -->
 <div id="loading" class="text-center my-5 loading-box">
     <div class="spinner-border text-primary" role="status"></div>
     <div class="mt-2 text-muted fw-bold">正從 Google Sheets 載入即時資料...</div>
 </div>
 
-<!-- 資料表格區域 -->
 <div class="sheet-container d-none" id="sheetContainer">
     <table class="excel-table">
         <thead>
@@ -126,10 +117,10 @@
 </div>
 
 <script>
-    // ⚠️ 請替換為您部署後獲得的 Google Apps Script Web App URL ⚠️
-    const GAS_API_URL = "https://script.google.com/macros/s/您的部署ID/exec";
+    // ⚠️ 請將下方雙引號內的網址替換為您從 Google Apps Script 複製的 Web App URL ⚠️
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzaiqzWkcKmMSanWK5bjco3Vd8roEDK-_IZQJlnwgGLsFHVLYvzNZGYOOJvtAru8ny1tg/exec";
 
-    // 您指定的 22 個欄位
+    // 您的 22 個指定欄位
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
         "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
@@ -139,10 +130,18 @@
 
     let globalData = [];
 
-    // 取得資料
     async function fetchData() {
         try {
-            const response = await fetch(GAS_API_URL);
+            // 使用 redirect: 'follow' 處理 Google Apps Script 轉址問題
+            const response = await fetch(GAS_API_URL, {
+                method: 'GET',
+                redirect: 'follow'
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP 錯誤! 狀態碼: ${response.status}`);
+            }
+
             globalData = await response.json();
 
             if (globalData.error) {
@@ -156,21 +155,24 @@
             document.getElementById('sheetContainer').classList.remove('d-none');
             document.getElementById('dataCount').innerText = `${globalData.length} 筆資料`;
         } catch (err) {
-            console.error("載入失敗:", err);
+            console.error("讀取失敗細節:", err);
             document.getElementById('loading').innerHTML = `
-                <div class="text-danger fw-bold">❌ 資料讀取失敗</div>
-                <div class="text-muted text-sm mt-1">請檢查 Google Apps Script 權限是否設為「所有人 (Anyone)」，或確認 API 網址是否正確。</div>
+                <div class="text-danger fw-bold fs-5">❌ 資料讀取失敗</div>
+                <div class="text-muted text-sm mt-2">
+                    常見原因與解決方法：<br>
+                    1. <strong>權限未開放：</strong> 請回到 Apps Script 點擊「部署」>「管理部署」，確認<strong>「誰可以存取 (Who has access)」</strong>設為<strong>「所有人 (Anyone)」</strong>。<br>
+                    2. <strong>未發布新版本：</strong> 修改 Apps Script 程式碼後，必須選擇「建立新版本 (New Version)」再部署才會生效。<br>
+                    3. <strong>網址貼錯：</strong> 網址必須以 <code>https://script.google.com/macros/s/.../exec</code> 結尾。
+                </div>
             `;
         }
     }
 
-    // 渲染表頭
     function renderHeader() {
         const headerRow = document.getElementById('tableHeader');
         headerRow.innerHTML = columns.map(col => `<th>${col}</th>`).join('');
     }
 
-    // 渲染表格內容
     function renderTableRows(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -186,22 +188,20 @@
 
             let rowHtml = '';
             columns.forEach(col => {
-                // 處理欄位對應（相容欄位開頭結尾空格問題）
                 let cellVal = row[col] !== undefined ? row[col] : (row[col + " "] || '');
 
-                // 日期格式優化 (移除 ISO 時間字串如 T16:00:00.000Z)
-                if (typeof cellVal === 'string' && cellVal.includes('T')) {
+                // 處理日期格式 (移除時間字串)
+                if (typeof cellVal === 'string' && cellVal.includes('T') && cellVal.includes('Z')) {
                     const dateObj = new Date(cellVal);
                     if (!isNaN(dateObj.getTime())) {
                         cellVal = cellVal.split('T')[0];
                     }
                 }
 
-                // 金額/數量 數值對齊處理
+                // 數字欄位靠右對齊
                 const isNumericCol = ['QTY', 'Unit Price', 'Amount'].includes(col);
                 const alignClass = isNumericCol ? 'text-right' : '';
 
-                // 如果是金額/單價，格式化數字（範例：千分位加逗號）
                 if (isNumericCol && typeof cellVal === 'number') {
                     cellVal = cellVal.toLocaleString();
                 }
@@ -214,7 +214,7 @@
         });
     }
 
-    // 前端即時搜尋過濾
+    // 關鍵字搜尋功能
     document.getElementById('searchInput').addEventListener('input', function(e) {
         const keyword = e.target.value.toLowerCase().trim();
         const filteredData = globalData.filter(row => {
@@ -226,7 +226,6 @@
         document.getElementById('dataCount').innerText = `${filteredData.length} 筆資料`;
     });
 
-    // 頁面初次開啟時執行
     fetchData();
 </script>
 
