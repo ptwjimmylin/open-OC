@@ -125,6 +125,19 @@
             border-bottom: 2px solid #0f172a;
         }
 
+        /* 操作欄位固定在最左或最右 */
+        .excel-table th.col-actions, .excel-table td.col-actions {
+            position: sticky;
+            right: 0;
+            background: #ffffff;
+            z-index: 5;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+        }
+        .excel-table th.col-actions {
+            background-color: #1e293b !important;
+            z-index: 12;
+        }
+
         .excel-table td {
             padding: 7px 12px;
             border-bottom: 1px solid #e2e8f0;
@@ -134,14 +147,6 @@
 
         .excel-table tbody tr:hover {
             background-color: #f1f5f9 !important;
-        }
-
-        .row-newly-added {
-            animation: highlightFade 4s ease-out forwards;
-        }
-        @keyframes highlightFade {
-            0% { background-color: #fef08a !important; }
-            100% { background-color: #ffffff !important; }
         }
 
         /* 狀態標籤 */
@@ -177,7 +182,7 @@
     </div>
     <div class="d-flex gap-2 align-items-center">
         <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
-        <button class="btn btn-primary btn-sm fw-bold px-3" data-bs-toggle="modal" data-bs-target="#addOcModal">
+        <button class="btn btn-primary btn-sm fw-bold px-3" onclick="openModalForAdd()">
             <i class="fa-solid fa-plus me-1"></i> 登記新 OC / PO
         </button>
         <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="exportToExcel()">
@@ -241,16 +246,18 @@
     </div>
 </div>
 
-<!-- 登記新 OC Modal 彈窗 -->
+<!-- 登記/編輯 OC Modal 彈窗 -->
 <div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-pen-to-square me-2"></i>登記 Order Confirmation (OC)</h5>
+                <h5 class="modal-title fw-bold fs-6" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記 Order Confirmation (OC)</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="ocForm" class="row g-3" onsubmit="event.preventDefault(); submitOCData();">
+                    <input type="hidden" id="formAction" value="add">
+
                     <div class="col-md-3"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
                     <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO" required></div>
                     <div class="col-md-3"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
@@ -300,7 +307,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxN0rVufJWv5fxti3sWUR6GeshDR5uwlPbvImjeuRTTpCgF-19Ipb_hsfaBLrAvsvF6eA/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbymrR5fZXMP0ZF9GG_efMMc0-kOWXsWpqA5Vk0wfbg-JJwKeKl4D-EvGvu-DwCIg2cu8g/exec";
 
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
@@ -311,7 +318,6 @@
 
     let globalData = [];
     let activeFilter = 'ALL';
-    let newlyAddedRow = null;
 
     function initApp() {
         renderHeader();
@@ -373,7 +379,9 @@
     }
 
     function renderHeader() {
-        document.getElementById('tableHeader').innerHTML = columns.map(c => `<th>${c}</th>`).join('');
+        // 在最後加上「操作」標題
+        const headersHtml = columns.map(c => `<th>${c}</th>`).join('') + `<th class="col-actions text-center">操作</th>`;
+        document.getElementById('tableHeader').innerHTML = headersHtml;
     }
 
     function renderRows(data) {
@@ -385,13 +393,10 @@
             const rawStatus = String(row["Status"] || "").trim();
             const statusLower = rawStatus.toLowerCase();
             const ocVal = String(row["OC"] || row["OC#"] || "").trim();
+            const poVal = String(row["PO"] || "").trim();
 
             if (statusLower === 'cancelled') {
                 tr.classList.add('row-cancelled');
-            }
-
-            if (newlyAddedRow && row["PO"] === newlyAddedRow["PO"] && row["Date"] === newlyAddedRow["Date"]) {
-                tr.classList.add('row-newly-added');
             }
 
             let rowHtml = '';
@@ -421,6 +426,19 @@
 
                 rowHtml += `<td class="${isNumeric ? 'text-right' : ''}">${val}</td>`;
             });
+
+            // 附上編輯與刪除按鈕
+            const encodedRow = encodeURIComponent(JSON.stringify(row));
+            rowHtml += `
+                <td class="col-actions text-center">
+                    <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="openModalForEdit('${encodedRow}')" title="編輯">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteRow('${poVal}')" title="刪除">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </td>
+            `;
 
             tr.innerHTML = rowHtml;
             tbody.appendChild(tr);
@@ -468,19 +486,98 @@
         document.getElementById('input_Amount').value = (qty * price).toFixed(2);
     }
 
-    // 寫入函數：以 FormData 發送至 Apps Script
+    // 開啟新增視窗
+    function openModalForAdd() {
+        document.getElementById('ocForm').reset();
+        document.getElementById('formAction').value = "add";
+        document.getElementById('input_PO').readOnly = false;
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記 Order Confirmation (OC)`;
+        
+        const modalEl = document.getElementById('addOcModal');
+        const modalObj = new bootstrap.Modal(modalEl);
+        modalObj.show();
+    }
+
+    // 開啟編輯視窗並帶入資料
+    function openModalForEdit(encodedRowData) {
+        const row = JSON.parse(decodeURIComponent(encodedRowData));
+        document.getElementById('formAction').value = "update";
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>修改 PO #${row["PO"] || ''} 資料`;
+
+        columns.forEach(col => {
+            const input = document.getElementById(`input_${col}`);
+            if (input) {
+                let val = row[col] !== undefined ? row[col] : '';
+                if (typeof val === 'string' && val.includes('T') && val.includes('Z')) {
+                    val = val.split('T')[0];
+                }
+                input.value = val;
+            }
+        });
+
+        // 編輯時 PO 欄位設定為唯讀，作為 key 值
+        document.getElementById('input_PO').readOnly = true;
+
+        const modalEl = document.getElementById('addOcModal');
+        const modalObj = new bootstrap.Modal(modalEl);
+        modalObj.show();
+    }
+
+    // 刪除資料功能
+    async function deleteRow(poNumber) {
+        if (!poNumber) {
+            alert('無法定位該筆資料的 PO 號碼！');
+            return;
+        }
+
+        if (!confirm(`確定要刪除 PO #${poNumber} 的這筆資料嗎？此操作無法復原。`)) {
+            return;
+        }
+
+        const syncStatus = document.getElementById('syncStatus');
+        syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 刪除中...`;
+
+        const params = new URLSearchParams({
+            action: "delete",
+            PO: poNumber
+        });
+
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            });
+
+            alert(`✅ PO #${poNumber} 資料已刪除！`);
+
+            // 本地刪除並同步快取
+            globalData = globalData.filter(r => String(r["PO"] || "").trim() !== poNumber);
+            localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
+
+            updateDashboard();
+            applyFilters();
+            syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已最新`;
+        } catch (err) {
+            alert('❌ 刪除失敗: ' + err.message);
+            fetchLatestData();
+        }
+    }
+
+    // 提交（新增或修改）
     async function submitOCData() {
+        const action = document.getElementById('formAction').value;
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
-        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 寫入中...`;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 處理中...`;
 
-        const payload = { action: "add" };
+        const payload = { action: action };
         columns.forEach(col => {
             const el = document.getElementById(`input_${col}`);
             payload[col] = el ? el.value : "";
         });
 
-        // 建立 URL 參數
         const params = new URLSearchParams(payload);
 
         try {
@@ -491,10 +588,16 @@
                 body: params.toString()
             });
 
-            alert('✅ 新 OC 資料已成功寫入！');
+            alert(action === 'add' ? '✅ 新 OC 資料已成功新增！' : '✅ 資料已成功修改！');
 
-            newlyAddedRow = payload;
-            globalData.unshift(payload);
+            if (action === 'add') {
+                globalData.unshift(payload);
+            } else {
+                const poKey = payload["PO"];
+                const idx = globalData.findIndex(r => String(r["PO"] || "").trim() === poKey);
+                if (idx !== -1) globalData[idx] = payload;
+            }
+
             localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
 
             updateDashboard();
@@ -505,7 +608,6 @@
             const modalObj = bootstrap.Modal.getInstance(modalEl);
             if (modalObj) modalObj.hide();
 
-            document.querySelector('.sheet-container').scrollTop = 0;
         } catch (err) {
             alert('❌ 儲存失敗: ' + err.message);
         } finally {
