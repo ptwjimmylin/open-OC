@@ -7,7 +7,7 @@
     <!-- Bootstrap 5 CSS & FontAwesome Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS 處理 Excel 讀寫 -->
+    <!-- SheetJS 處理 Excel 匯入匯出 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -29,7 +29,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         .app-title {
@@ -41,11 +41,29 @@
             gap: 8px;
         }
 
-        /* 可點擊互動的 Dashboard 按鈕卡片 */
+        /* 雙 Sheet 頁籤切換 */
+        .sheet-tabs .nav-link {
+            font-weight: 700;
+            font-size: 14px;
+            color: #475569;
+            background-color: #e2e8f0;
+            border-radius: 8px 8px 0 0;
+            padding: 8px 18px;
+            margin-right: 4px;
+            border: 1px solid #cbd5e1;
+            border-bottom: none;
+        }
+        .sheet-tabs .nav-link.active {
+            color: #2563eb;
+            background-color: #ffffff;
+            border-top: 3px solid #2563eb;
+        }
+
+        /* Dashboard 卡片 */
         .stat-card-btn {
             background: #ffffff;
             border-radius: 8px;
-            padding: 12px 16px;
+            padding: 10px 14px;
             border: 2px solid #e2e8f0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             cursor: pointer;
@@ -72,15 +90,15 @@
             text-transform: uppercase;
         }
         .stat-value {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
             margin-top: 2px;
         }
 
-        /* 表格容器與雙向拉動 Scrollbar */
+        /* 表格與 Scrollbar */
         .table-card {
             background: #ffffff;
-            border-radius: 8px;
+            border-radius: 0 0 8px 8px;
             border: 1px solid #cbd5e1;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             overflow: hidden;
@@ -88,7 +106,7 @@
 
         .sheet-container {
             overflow: auto;
-            max-height: 65vh;
+            max-height: 60vh;
             width: 100%;
         }
 
@@ -170,11 +188,11 @@
 
         .text-right { text-align: right; }
 
-        .nav-tabs .nav-link {
+        .modal-tabs .nav-link {
             font-weight: 600;
             color: #64748b;
         }
-        .nav-tabs .nav-link.active {
+        .modal-tabs .nav-link.active {
             color: #2563eb;
             border-bottom: 3px solid #2563eb;
         }
@@ -191,27 +209,25 @@
         <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
         
         <button class="btn btn-primary btn-sm fw-bold px-3" onclick="openModalForAdd()">
-            <i class="fa-solid fa-plus me-1"></i> 登記新 OC / PO
+            <i class="fa-solid fa-plus me-1"></i> 登記新紀錄
         </button>
 
-        <!-- 匯入 Excel 隱藏 input -->
         <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFileImport(event)">
         <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="document.getElementById('excelFileInput').click()">
-            <i class="fa-solid fa-file-import me-1"></i> 匯入檔案
+            <i class="fa-solid fa-file-import me-1"></i> 匯出/匯入檔案
         </button>
 
         <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="exportToExcel()">
-            <i class="fa-solid fa-file-excel me-1"></i> 匯出 Excel
+            <i class="fa-solid fa-file-excel me-1"></i> 匯出目前 Sheet
         </button>
 
-        <!-- 清空全部按鈕 (觸發二次確認 Modal) -->
         <button class="btn btn-outline-danger btn-sm fw-bold px-3" data-bs-toggle="modal" data-bs-target="#clearConfirmModal">
-            <i class="fa-solid fa-trash-arrow-up me-1"></i> 全部移除
+            <i class="fa-solid fa-trash-arrow-up me-1"></i> 清空當前 Sheet
         </button>
     </div>
 </div>
 
-<!-- 📊 Dashboard 可點擊按鈕卡片 -->
+<!-- Dashboard 卡片 -->
 <div class="row g-3 mb-3">
     <div class="col-md-3">
         <button class="stat-card-btn active" id="btnDashALL" onclick="filterByStatus('ALL', this)">
@@ -239,9 +255,23 @@
     </div>
 </div>
 
+<!-- 工作表頁籤切換 (Open PO vs Open OC) -->
+<ul class="nav nav-tabs sheet-tabs" id="sheetTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-po" onclick="switchSheet('Open PO (TW)')">
+            <i class="fa-solid fa-file-invoice me-1"></i> Open PO (TW)
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-oc" onclick="switchSheet('Open OC (TW)')">
+            <i class="fa-solid fa-file-signature me-1"></i> Open OC (TW)
+        </button>
+    </li>
+</ul>
+
 <!-- 搜尋與過濾選項列 -->
-<div class="table-card p-2 px-3 mb-3">
-    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="table-card p-2 px-3 border-top-0">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
         <div class="btn-group btn-group-sm" role="group">
             <button type="button" class="btn btn-outline-secondary active" id="btnFilterALL" onclick="filterByStatus('ALL', this)">全部 (All)</button>
             <button type="button" class="btn btn-outline-warning" id="btnFilterOPEN" onclick="filterByStatus('OPEN', this)">🔥 僅看 Open</button>
@@ -254,10 +284,8 @@
             <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 250px;" placeholder="🔍 搜尋 PO, OC, Customer...">
         </div>
     </div>
-</div>
 
-<!-- 資料表格區域 (雙向拖曳軸) -->
-<div class="table-card" id="sheetContainer">
+    <!-- 表格區域 -->
     <div class="sheet-container">
         <table class="excel-table">
             <thead><tr id="tableHeader"></tr></thead>
@@ -266,16 +294,16 @@
     </div>
 </div>
 
-<!-- 雙頁分組：登記/編輯 OC Modal 彈窗 -->
+<!-- 登記/編輯 Modal 彈窗 -->
 <div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title fw-bold fs-6" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記 Order Confirmation (OC)</h5>
+                <h5 class="modal-title fw-bold fs-6" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記資料</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <ul class="nav nav-tabs mb-3" id="formTabs" role="tablist">
+                <ul class="nav nav-tabs modal-tabs mb-3" id="formTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="customer-tab" data-bs-toggle="tab" data-bs-target="#customer-pane" type="button" role="tab"><i class="fa-solid fa-user-tag me-1"></i> 客戶端資訊 (Customer)</button>
                     </li>
@@ -286,17 +314,17 @@
 
                 <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
                     <input type="hidden" id="formAction" value="add">
-                    <input type="hidden" id="originalPO" value="">
+                    <input type="hidden" id="editingRowIndex" value="">
 
                     <div class="tab-content" id="formTabsContent">
-                        <!-- 頁面 1：客戶端資訊 -->
+                        <!-- 客戶端資訊 -->
                         <div class="tab-pane fade show active" id="customer-pane" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-4"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer"></div>
                                 <div class="col-md-4"><label class="form-label fw-bold">Customer PO#</label><input type="text" class="form-control form-control-sm" id="input_Customer PO"></div>
                                 <div class="col-md-4"><label class="form-label fw-bold">Cus. Region</label><input type="text" class="form-control form-control-sm" id="input_Cus. Region" value="TW"></div>
 
-                                <div class="col-md-4"><label class="form-label fw-bold text-primary">PO # (我們的 PO)</label><input type="text" class="form-control form-control-sm border-primary" id="input_PO" required></div>
+                                <div class="col-md-4"><label class="form-label fw-bold text-primary">PO #</label><input type="text" class="form-control form-control-sm border-primary" id="input_PO" required></div>
                                 <div class="col-md-4"><label class="form-label fw-bold text-primary">OC# (Confirm 號碼)</label><input type="text" class="form-control form-control-sm border-primary" id="input_OC"></div>
                                 <div class="col-md-4"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
 
@@ -319,7 +347,7 @@
                             </div>
                         </div>
 
-                        <!-- 頁面 2：供應商端資訊 -->
+                        <!-- 供應商端資訊 -->
                         <div class="tab-pane fade" id="supplier-pane" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-6"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
@@ -339,7 +367,7 @@
                     <div class="col-12 text-end mt-4">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
                         <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold" id="submitBtn">
-                            <i class="fa-solid fa-cloud-arrow-up me-1"></i> 寫入至 Google Sheet
+                            <i class="fa-solid fa-cloud-arrow-up me-1"></i> 儲存寫入
                         </button>
                     </div>
                 </form>
@@ -348,23 +376,23 @@
     </div>
 </div>
 
-<!-- ⚠️ 全部移除二次確認視窗 (Modal) -->
+<!-- 清空確認 Modal -->
 <div class="modal fade" id="clearConfirmModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-triangle-exclamation me-2"></i>警告：刪除確認</h5>
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-triangle-exclamation me-2"></i>警告：清空確認</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center py-4">
                 <i class="fa-solid fa-circle-exclamation text-danger fa-3x mb-3"></i>
-                <h6 class="fw-bold">您確定要清空並移除所有紀錄嗎？</h6>
-                <p class="text-muted small mb-0">這將會刪除 Google Sheet 與網頁上的全部 PO & OC 資料，此操作無法復原！</p>
+                <h6 class="fw-bold">確定要清空當前 Sheet 的所有資料嗎？</h6>
+                <p class="text-muted small mb-0">此操作將會移除這個工作表中的所有紀錄，無法復原！</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-danger btn-sm px-4 fw-bold" onclick="clearAllData()">
-                    <i class="fa-solid fa-trash-can me-1"></i> 確定全部移除
+                <button type="button" class="btn btn-danger btn-sm px-4 fw-bold" onclick="clearCurrentSheet()">
+                    <i class="fa-solid fa-trash-can me-1"></i> 確定清空
                 </button>
             </div>
         </div>
@@ -374,7 +402,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzGKzewwhXTYUZS4u3pigK7s75Gs-s13P8jK0R3YeI7O1a6ED_BkKDi2QPgaE4kQyVQ/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
@@ -383,12 +411,13 @@
         "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
     ];
 
+    let currentSheetName = 'Open PO (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
 
     function initApp() {
         renderHeader();
-        const cached = localStorage.getItem("oc_cache_data");
+        const cached = localStorage.getItem(`oc_cache_${currentSheetName}`);
         if (cached) {
             try {
                 globalData = JSON.parse(cached);
@@ -399,21 +428,31 @@
         fetchLatestData();
     }
 
+    // 切換工作表 (Open PO vs Open OC)
+    function switchSheet(sheetName) {
+        currentSheetName = sheetName;
+        document.querySelectorAll('.sheet-tabs .nav-link').forEach(btn => btn.classList.remove('active'));
+        if (sheetName === 'Open PO (TW)') document.getElementById('tab-po').classList.add('active');
+        if (sheetName === 'Open OC (TW)') document.getElementById('tab-oc').classList.add('active');
+
+        initApp();
+    }
+
     async function fetchLatestData() {
         const syncStatus = document.getElementById('syncStatus');
         syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 同步中...`;
 
         try {
-            const res = await fetch(GAS_API_URL, { method: 'GET', redirect: 'follow' });
+            const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}`, { method: 'GET', redirect: 'follow' });
             const data = await res.json();
 
             if (Array.isArray(data)) {
                 globalData = data;
-                localStorage.setItem("oc_cache_data", JSON.stringify(data));
+                localStorage.setItem(`oc_cache_${currentSheetName}`, JSON.stringify(data));
                 
                 updateDashboard();
                 applyFilters();
-                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已最新`;
+                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已最新 (${currentSheetName})`;
             }
         } catch (err) {
             console.error(err);
@@ -459,7 +498,7 @@
             const rawStatus = String(row["Status"] || "").trim();
             const statusLower = rawStatus.toLowerCase();
             const ocVal = String(row["OC"] || row["OC#"] || "").trim();
-            const poVal = String(row["PO"] || "").trim();
+            const rowIndex = row["_rowIndex"];
 
             if (statusLower === 'cancelled') {
                 tr.classList.add('row-cancelled');
@@ -499,7 +538,7 @@
                     <button class="btn btn-outline-primary btn-sm py-0 px-2 me-1" onclick="openModalForEdit('${encodedRow}')" title="編輯">
                         <i class="fa-solid fa-pen-to-square"></i>
                     </button>
-                    <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteRow('${poVal}')" title="刪除">
+                    <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteRow(${rowIndex})" title="刪除">
                         <i class="fa-solid fa-trash-can"></i>
                     </button>
                 </td>
@@ -512,7 +551,6 @@
 
     function filterByStatus(type, btn) {
         activeFilter = type;
-        
         document.querySelectorAll('.stat-card-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
 
@@ -554,9 +592,8 @@
     function openModalForAdd() {
         document.getElementById('ocForm').reset();
         document.getElementById('formAction').value = "add";
-        document.getElementById('originalPO').value = "";
-        document.getElementById('input_PO').readOnly = false;
-        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記 Order Confirmation (OC)`;
+        document.getElementById('editingRowIndex').value = "";
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記至 ${currentSheetName}`;
         
         const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
         firstTab.show();
@@ -569,9 +606,8 @@
     function openModalForEdit(encodedRowData) {
         const row = JSON.parse(decodeURIComponent(encodedRowData));
         document.getElementById('formAction').value = "update";
-        const currentPO = String(row["PO"] || '').trim();
-        document.getElementById('originalPO').value = currentPO;
-        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>修改 PO #${currentPO} 資料`;
+        document.getElementById('editingRowIndex').value = row._rowIndex;
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>編輯紀錄 (Row #${row._rowIndex})`;
 
         columns.forEach(col => {
             const input = document.getElementById(`input_${col}`);
@@ -584,8 +620,6 @@
             }
         });
 
-        document.getElementById('input_PO').readOnly = false;
-
         const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
         firstTab.show();
 
@@ -594,7 +628,35 @@
         modalObj.show();
     }
 
-    // 匯入 Excel 檔案處理邏輯
+    // 模糊標頭正規化比對（Smart Header Normalization）
+    function normalizeHeaderKey(rawKey) {
+        const k = String(rawKey).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (k === 'date') return 'Date';
+        if (k === 'po' || k === 'po#') return 'PO';
+        if (k === 'supplier') return 'Supplier';
+        if (k === 'customer') return 'Customer';
+        if (k === 'customerpo' || k === 'customerpo#') return 'Customer PO';
+        if (k === 'oc' || k === 'oc#') return 'OC';
+        if (k === 'cusregion' || k === 'region') return 'Cus. Region';
+        if (k === 'description' || k === 'desc') return 'Description';
+        if (k === 'qty' || k === 'quantity') return 'QTY';
+        if (k === 'eta') return 'ETA';
+        if (k === 'status') return 'Status';
+        if (k === 'incoterms' || k === 'inco') return 'Inco-terms';
+        if (k === 'currency' || k === 'curr') return 'Currency';
+        if (k === 'unitprice' || k === 'price') return 'Unit Price';
+        if (k === 'amount' || k === 'amt') return 'Amount';
+        if (k === 'createdby') return 'Created by';
+        if (k === 'remark' || k === 'remarks') return 'Remark';
+        if (k === 'goodsreceiveddate') return 'Goods Received Date';
+        if (k === 'invdate') return 'Inv Date';
+        if (k === 'supplierinv') return 'Supplier Inv';
+        if (k === 'paymentterms') return 'Payment Terms';
+        if (k === 'receivedcusexchgparts') return 'Received Cus Exchg Parts';
+        return null;
+    }
+
+    // 多 Sheet 自動解析與整批匯入
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -604,31 +666,48 @@
             try {
                 const data = new Uint8Array(evt.target.result);
                 const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                const importedItems = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
-                if (importedItems.length === 0) {
-                    alert('匯入的檔案中沒有資料！');
-                    return;
+                const syncStatus = document.getElementById('syncStatus');
+                syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
+
+                for (const sheetName of workbook.SheetNames) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (rawRows.length > 0) {
+                        const normalizedRows = rawRows.map(row => {
+                            const newObj = {};
+                            Object.keys(row).forEach(rawKey => {
+                                const matchedCol = normalizeHeaderKey(rawKey);
+                                if (matchedCol) {
+                                    newObj[matchedCol] = row[rawKey];
+                                }
+                            });
+                            return newObj;
+                        });
+
+                        // 判斷寫入 Target Sheet
+                        let targetSheet = "Open PO (TW)";
+                        if (sheetName.toLowerCase().includes("oc")) targetSheet = "Open OC (TW)";
+
+                        await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: "batchAdd",
+                                sheetName: targetSheet,
+                                items: normalizedRows
+                            })
+                        });
+                    }
                 }
 
-                if (confirm(`解析成功，共找到 ${importedItems.length} 筆資料，確定要全部匯入嗎？`)) {
-                    const syncStatus = document.getElementById('syncStatus');
-                    syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
+                alert(`✅ Excel 檔案包含的所有 Sheet 資料已成功解析並匯入完畢！`);
+                fetchLatestData();
 
-                    await fetch(GAS_API_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: "batchAdd", items: importedItems })
-                    });
-
-                    alert(`✅ 已成功匯入 ${importedItems.length} 筆資料！`);
-                    fetchLatestData();
-                }
             } catch (err) {
-                alert('❌ 檔案解析失敗: ' + err.message);
+                alert('❌ 檔案匯入失敗: ' + err.message);
             } finally {
                 document.getElementById('excelFileInput').value = "";
             }
@@ -636,8 +715,32 @@
         reader.readAsArrayBuffer(file);
     }
 
-    // 清空全部紀錄函數
-    async function clearAllData() {
+    async function deleteRow(rowIndex) {
+        if (!confirm(`確定要刪除列號 #${rowIndex} 的這筆紀錄嗎？`)) return;
+
+        const syncStatus = document.getElementById('syncStatus');
+        syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 刪除中...`;
+
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: "delete",
+                    sheetName: currentSheetName,
+                    rowIndex: rowIndex
+                })
+            });
+
+            alert(`✅ 列號 #${rowIndex} 紀錄已刪除！`);
+            fetchLatestData();
+        } catch (err) {
+            alert('❌ 刪除失敗: ' + err.message);
+        }
+    }
+
+    async function clearCurrentSheet() {
         const confirmModalEl = document.getElementById('clearConfirmModal');
         const confirmModalObj = bootstrap.Modal.getInstance(confirmModalEl);
         if (confirmModalObj) confirmModalObj.hide();
@@ -645,119 +748,71 @@
         const syncStatus = document.getElementById('syncStatus');
         syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 清空資料中...`;
 
-        const params = new URLSearchParams({ action: "clearAll" });
-
         try {
             await fetch(GAS_API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params.toString()
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: "clearAll",
+                    sheetName: currentSheetName
+                })
             });
 
-            alert('✅ 所有紀錄已全數清空！');
-            globalData = [];
-            localStorage.removeItem("oc_cache_data");
-
-            updateDashboard();
-            applyFilters();
-            syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已清空`;
+            alert(`✅ ${currentSheetName} 資料已清空！`);
+            fetchLatestData();
         } catch (err) {
             alert('❌ 清空失敗: ' + err.message);
-            fetchLatestData();
-        }
-    }
-
-    async function deleteRow(poNumber) {
-        if (!poNumber) {
-            alert('無法定位該筆資料的 PO 號碼！');
-            return;
-        }
-
-        if (!confirm(`確定要刪除 PO #${poNumber} 的這筆資料嗎？`)) return;
-
-        const syncStatus = document.getElementById('syncStatus');
-        syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 刪除中...`;
-
-        const params = new URLSearchParams({ action: "delete", PO: poNumber });
-
-        try {
-            await fetch(GAS_API_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params.toString()
-            });
-
-            alert(`✅ PO #${poNumber} 資料已刪除！`);
-            globalData = globalData.filter(r => String(r["PO"] || "").trim() !== poNumber);
-            localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
-
-            updateDashboard();
-            applyFilters();
-            syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已最新`;
-        } catch (err) {
-            alert('❌ 刪除失敗: ' + err.message);
-            fetchLatestData();
         }
     }
 
     async function submitOCData() {
         const action = document.getElementById('formAction').value;
-        const originalPO = document.getElementById('originalPO').value;
+        const rowIndex = document.getElementById('editingRowIndex').value;
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 處理中...`;
 
-        const payload = { action: action, originalPO: originalPO };
+        const payload = {
+            action: action,
+            sheetName: currentSheetName,
+            rowIndex: rowIndex
+        };
+
         columns.forEach(col => {
             const el = document.getElementById(`input_${col}`);
             payload[col] = el ? el.value : "";
         });
 
-        const params = new URLSearchParams(payload);
-
         try {
             await fetch(GAS_API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: params.toString()
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
-            alert(action === 'add' ? '✅ 新 OC 資料已成功新增！' : '✅ 資料已成功修改！');
-
-            if (action === 'add') {
-                globalData.unshift(payload);
-            } else {
-                const searchPO = originalPO || payload["PO"];
-                const idx = globalData.findIndex(r => String(r["PO"] || "").trim() === String(searchPO).trim());
-                if (idx !== -1) globalData[idx] = payload;
-            }
-
-            localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
-
-            updateDashboard();
-            applyFilters();
+            alert(action === 'add' ? '✅ 新紀錄已成功新增！' : '✅ 紀錄修改已成功儲存！');
 
             document.getElementById('ocForm').reset();
             const modalEl = document.getElementById('addOcModal');
             const modalObj = bootstrap.Modal.getInstance(modalEl);
             if (modalObj) modalObj.hide();
 
+            fetchLatestData();
         } catch (err) {
             alert('❌ 儲存失敗: ' + err.message);
         } finally {
             submitBtn.disabled = false;
-            submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> 寫入至 Google Sheet`;
+            submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up me-1"></i> 儲存寫入`;
         }
     }
 
     function exportToExcel() {
         const worksheet = XLSX.utils.json_to_sheet(globalData, { header: columns });
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "OC Data");
-        XLSX.writeFile(workbook, `OC_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        XLSX.utils.book_append_sheet(workbook, worksheet, currentSheetName);
+        XLSX.writeFile(workbook, `${currentSheetName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     document.getElementById('searchInput').addEventListener('input', applyFilters);
