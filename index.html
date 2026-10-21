@@ -125,7 +125,7 @@
             border-bottom: 2px solid #0f172a;
         }
 
-        /* 操作欄位固定在最左或最右 */
+        /* 操作欄位固定在最右 */
         .excel-table th.col-actions, .excel-table td.col-actions {
             position: sticky;
             right: 0;
@@ -171,6 +171,16 @@
         }
 
         .text-right { text-align: right; }
+
+        /* 分頁頁籤樣式 */
+        .nav-tabs .nav-link {
+            font-weight: 600;
+            color: #64748b;
+        }
+        .nav-tabs .nav-link.active {
+            color: #2563eb;
+            border-bottom: 3px solid #2563eb;
+        }
     </style>
 </head>
 <body>
@@ -246,7 +256,7 @@
     </div>
 </div>
 
-<!-- 登記/編輯 OC Modal 彈窗 -->
+<!-- 雙頁分組：登記/編輯 OC Modal 彈窗 -->
 <div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -255,42 +265,67 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="ocForm" class="row g-3" onsubmit="event.preventDefault(); submitOCData();">
+                <!-- 雙分頁頁籤 -->
+                <ul class="nav nav-tabs mb-3" id="formTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="customer-tab" data-bs-toggle="tab" data-bs-target="#customer-pane" type="button" role="tab"><i class="fa-solid fa-user-tag me-1"></i> 客戶端資訊 (Customer)</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="supplier-tab" data-bs-toggle="tab" data-bs-target="#supplier-pane" type="button" role="tab"><i class="fa-solid fa-truck-field me-1"></i> 供應商端資訊 (Supplier)</button>
+                    </li>
+                </ul>
+
+                <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
                     <input type="hidden" id="formAction" value="add">
+                    <input type="hidden" id="originalPO" value="">
 
-                    <div class="col-md-3"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">PO #</label><input type="text" class="form-control form-control-sm" id="input_PO" required></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer"></div>
+                    <div class="tab-content" id="formTabsContent">
+                        <!-- 頁面 1：客戶端資訊 -->
+                        <div class="tab-pane fade show active" id="customer-pane" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-4"><label class="form-label fw-bold">Customer</label><input type="text" class="form-control form-control-sm" id="input_Customer"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Customer PO#</label><input type="text" class="form-control form-control-sm" id="input_Customer PO"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Cus. Region</label><input type="text" class="form-control form-control-sm" id="input_Cus. Region" value="TW"></div>
 
-                    <div class="col-md-3"><label class="form-label fw-bold">Customer PO#</label><input type="text" class="form-control form-control-sm" id="input_Customer PO"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold text-primary">OC# (Confirm 號碼)</label><input type="text" class="form-control form-control-sm border-primary" id="input_OC" placeholder="輸入 OC 號碼"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Cus. Region</label><input type="text" class="form-control form-control-sm" id="input_Cus. Region" value="TW"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Status</label>
-                        <select class="form-select form-select-sm" id="input_Status">
-                            <option value="Open">Open</option>
-                            <option value="Completed">Completed</option>
-                            <option value="Cancelled">Cancelled</option>
-                        </select>
+                                <div class="col-md-4"><label class="form-label fw-bold text-primary">PO # (我們的 PO)</label><input type="text" class="form-control form-control-sm border-primary" id="input_PO" required></div>
+                                <div class="col-md-4"><label class="form-label fw-bold text-primary">OC# (Confirm 號碼)</label><input type="text" class="form-control form-control-sm border-primary" id="input_OC"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Date</label><input type="date" class="form-control form-control-sm" id="input_Date"></div>
+
+                                <div class="col-md-8"><label class="form-label fw-bold">Description</label><input type="text" class="form-control form-control-sm" id="input_Description"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Status</label>
+                                    <select class="form-select form-select-sm" id="input_Status">
+                                        <option value="Open">Open</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-3"><label class="form-label fw-bold">QTY</label><input type="number" class="form-control form-control-sm" id="input_QTY" value="1" oninput="calcAmount()"></div>
+                                <div class="col-md-3"><label class="form-label fw-bold">Unit Price</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Unit Price" oninput="calcAmount()"></div>
+                                <div class="col-md-3"><label class="form-label fw-bold">Amount</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Amount"></div>
+                                <div class="col-md-3"><label class="form-label fw-bold">Currency</label><input type="text" class="form-control form-control-sm" id="input_Currency" value="USD"></div>
+
+                                <div class="col-md-6"><label class="form-label fw-bold">Remark</label><input type="text" class="form-control form-control-sm" id="input_Remark"></div>
+                                <div class="col-md-6"><label class="form-label fw-bold">Received Cus Exchg Parts</label><input type="text" class="form-control form-control-sm" id="input_Received Cus Exchg Parts"></div>
+                            </div>
+                        </div>
+
+                        <!-- 頁面 2：供應商端資訊 -->
+                        <div class="tab-pane fade" id="supplier-pane" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label fw-bold">Supplier</label><input type="text" class="form-control form-control-sm" id="input_Supplier"></div>
+                                <div class="col-md-6"><label class="form-label fw-bold">Supplier Inv</label><input type="text" class="form-control form-control-sm" id="input_Supplier Inv"></div>
+
+                                <div class="col-md-4"><label class="form-label fw-bold">ETA</label><input type="date" class="form-control form-control-sm" id="input_ETA"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Goods Received Date</label><input type="date" class="form-control form-control-sm" id="input_Goods Received Date"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Inv Date</label><input type="date" class="form-control form-control-sm" id="input_Inv Date"></div>
+
+                                <div class="col-md-4"><label class="form-label fw-bold">Inco-terms</label><input type="text" class="form-control form-control-sm" id="input_Inco-terms" value="EXW"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Payment Terms</label><input type="text" class="form-control form-control-sm" id="input_Payment Terms"></div>
+                                <div class="col-md-4"><label class="form-label fw-bold">Created by</label><input type="text" class="form-control form-control-sm" id="input_Created by"></div>
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="col-md-6"><label class="form-label fw-bold">Description</label><input type="text" class="form-control form-control-sm" id="input_Description"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">QTY</label><input type="number" class="form-control form-control-sm" id="input_QTY" value="1" oninput="calcAmount()"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">ETA</label><input type="date" class="form-control form-control-sm" id="input_ETA"></div>
-
-                    <div class="col-md-2"><label class="form-label fw-bold">Inco-terms</label><input type="text" class="form-control form-control-sm" id="input_Inco-terms" value="EXW"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Currency</label><input type="text" class="form-control form-control-sm" id="input_Currency" value="USD"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Unit Price</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Unit Price" oninput="calcAmount()"></div>
-                    <div class="col-md-3"><label class="form-label fw-bold">Amount</label><input type="number" step="0.01" class="form-control form-control-sm" id="input_Amount"></div>
-                    <div class="col-md-2"><label class="form-label fw-bold">Created by</label><input type="text" class="form-control form-control-sm" id="input_Created by"></div>
-
-                    <div class="col-md-4"><label class="form-label fw-bold">Remark</label><input type="text" class="form-control form-control-sm" id="input_Remark"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Goods Received Date</label><input type="date" class="form-control form-control-sm" id="input_Goods Received Date"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Inv Date</label><input type="date" class="form-control form-control-sm" id="input_Inv Date"></div>
-
-                    <div class="col-md-4"><label class="form-label fw-bold">Supplier Inv</label><input type="text" class="form-control form-control-sm" id="input_Supplier Inv"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Payment Terms</label><input type="text" class="form-control form-control-sm" id="input_Payment Terms"></div>
-                    <div class="col-md-4"><label class="form-label fw-bold">Received Cus Exchg Parts</label><input type="text" class="form-control form-control-sm" id="input_Received Cus Exchg Parts"></div>
 
                     <div class="col-12 text-end mt-4">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
@@ -379,7 +414,6 @@
     }
 
     function renderHeader() {
-        // 在最後加上「操作」標題
         const headersHtml = columns.map(c => `<th>${c}</th>`).join('') + `<th class="col-actions text-center">操作</th>`;
         document.getElementById('tableHeader').innerHTML = headersHtml;
     }
@@ -427,7 +461,6 @@
                 rowHtml += `<td class="${isNumeric ? 'text-right' : ''}">${val}</td>`;
             });
 
-            // 附上編輯與刪除按鈕
             const encodedRow = encodeURIComponent(JSON.stringify(row));
             rowHtml += `
                 <td class="col-actions text-center">
@@ -486,23 +519,28 @@
         document.getElementById('input_Amount').value = (qty * price).toFixed(2);
     }
 
-    // 開啟新增視窗
     function openModalForAdd() {
         document.getElementById('ocForm').reset();
         document.getElementById('formAction').value = "add";
-        document.getElementById('input_PO').readOnly = false;
+        document.getElementById('originalPO').value = "";
+        document.getElementById('input_PO').readOnly = false; // 新增時可自由填寫 PO
         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記 Order Confirmation (OC)`;
         
+        // 預設切回第一個 Customer 分頁
+        const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
+        firstTab.show();
+
         const modalEl = document.getElementById('addOcModal');
         const modalObj = new bootstrap.Modal(modalEl);
         modalObj.show();
     }
 
-    // 開啟編輯視窗並帶入資料
     function openModalForEdit(encodedRowData) {
         const row = JSON.parse(decodeURIComponent(encodedRowData));
         document.getElementById('formAction').value = "update";
-        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>修改 PO #${row["PO"] || ''} 資料`;
+        const currentPO = String(row["PO"] || '').trim();
+        document.getElementById('originalPO').value = currentPO; // 紀錄原本的 PO 用於定位刪除/更新
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>修改 PO #${currentPO} 資料`;
 
         columns.forEach(col => {
             const input = document.getElementById(`input_${col}`);
@@ -515,32 +553,30 @@
             }
         });
 
-        // 編輯時 PO 欄位設定為唯讀，作為 key 值
-        document.getElementById('input_PO').readOnly = true;
+        // 核心修改：編輯時 PO 欄位改為可以任意編輯更改
+        document.getElementById('input_PO').readOnly = false;
+
+        // 預設切回第一個 Customer 分頁
+        const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
+        firstTab.show();
 
         const modalEl = document.getElementById('addOcModal');
         const modalObj = new bootstrap.Modal(modalEl);
         modalObj.show();
     }
 
-    // 刪除資料功能
     async function deleteRow(poNumber) {
         if (!poNumber) {
             alert('無法定位該筆資料的 PO 號碼！');
             return;
         }
 
-        if (!confirm(`確定要刪除 PO #${poNumber} 的這筆資料嗎？此操作無法復原。`)) {
-            return;
-        }
+        if (!confirm(`確定要刪除 PO #${poNumber} 的這筆資料嗎？`)) return;
 
         const syncStatus = document.getElementById('syncStatus');
         syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 刪除中...`;
 
-        const params = new URLSearchParams({
-            action: "delete",
-            PO: poNumber
-        });
+        const params = new URLSearchParams({ action: "delete", PO: poNumber });
 
         try {
             await fetch(GAS_API_URL, {
@@ -551,8 +587,6 @@
             });
 
             alert(`✅ PO #${poNumber} 資料已刪除！`);
-
-            // 本地刪除並同步快取
             globalData = globalData.filter(r => String(r["PO"] || "").trim() !== poNumber);
             localStorage.setItem("oc_cache_data", JSON.stringify(globalData));
 
@@ -565,14 +599,14 @@
         }
     }
 
-    // 提交（新增或修改）
     async function submitOCData() {
         const action = document.getElementById('formAction').value;
+        const originalPO = document.getElementById('originalPO').value;
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> 處理中...`;
 
-        const payload = { action: action };
+        const payload = { action: action, originalPO: originalPO };
         columns.forEach(col => {
             const el = document.getElementById(`input_${col}`);
             payload[col] = el ? el.value : "";
@@ -593,8 +627,8 @@
             if (action === 'add') {
                 globalData.unshift(payload);
             } else {
-                const poKey = payload["PO"];
-                const idx = globalData.findIndex(r => String(r["PO"] || "").trim() === poKey);
+                const searchPO = originalPO || payload["PO"];
+                const idx = globalData.findIndex(r => String(r["PO"] || "").trim() === String(searchPO).trim());
                 if (idx !== -1) globalData[idx] = payload;
             }
 
