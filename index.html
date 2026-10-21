@@ -7,7 +7,7 @@
     <!-- Bootstrap 5 CSS & FontAwesome Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS 匯出 Excel -->
+    <!-- SheetJS 處理 Excel 讀寫 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -125,7 +125,6 @@
             border-bottom: 2px solid #0f172a;
         }
 
-        /* 操作欄位固定在最右 */
         .excel-table th.col-actions, .excel-table td.col-actions {
             position: sticky;
             right: 0;
@@ -149,7 +148,6 @@
             background-color: #f1f5f9 !important;
         }
 
-        /* 狀態標籤 */
         .badge-status {
             padding: 3px 8px;
             border-radius: 4px;
@@ -172,7 +170,6 @@
 
         .text-right { text-align: right; }
 
-        /* 分頁頁籤樣式 */
         .nav-tabs .nav-link {
             font-weight: 600;
             color: #64748b;
@@ -190,13 +187,26 @@
         <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
         <span>2026 PTW TW_Open OC & PO Management</span>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
         <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
+        
         <button class="btn btn-primary btn-sm fw-bold px-3" onclick="openModalForAdd()">
             <i class="fa-solid fa-plus me-1"></i> 登記新 OC / PO
         </button>
+
+        <!-- 匯入 Excel 隱藏 input -->
+        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFileImport(event)">
+        <button class="btn btn-outline-secondary btn-sm fw-bold px-3" onclick="document.getElementById('excelFileInput').click()">
+            <i class="fa-solid fa-file-import me-1"></i> 匯入檔案
+        </button>
+
         <button class="btn btn-outline-success btn-sm fw-bold px-3" onclick="exportToExcel()">
             <i class="fa-solid fa-file-excel me-1"></i> 匯出 Excel
+        </button>
+
+        <!-- 清空全部按鈕 (觸發二次確認 Modal) -->
+        <button class="btn btn-outline-danger btn-sm fw-bold px-3" data-bs-toggle="modal" data-bs-target="#clearConfirmModal">
+            <i class="fa-solid fa-trash-arrow-up me-1"></i> 全部移除
         </button>
     </div>
 </div>
@@ -265,7 +275,6 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <!-- 雙分頁頁籤 -->
                 <ul class="nav nav-tabs mb-3" id="formTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="customer-tab" data-bs-toggle="tab" data-bs-target="#customer-pane" type="button" role="tab"><i class="fa-solid fa-user-tag me-1"></i> 客戶端資訊 (Customer)</button>
@@ -339,10 +348,33 @@
     </div>
 </div>
 
+<!-- ⚠️ 全部移除二次確認視窗 (Modal) -->
+<div class="modal fade" id="clearConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold fs-6"><i class="fa-solid fa-triangle-exclamation me-2"></i>警告：刪除確認</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center py-4">
+                <i class="fa-solid fa-circle-exclamation text-danger fa-3x mb-3"></i>
+                <h6 class="fw-bold">您確定要清空並移除所有紀錄嗎？</h6>
+                <p class="text-muted small mb-0">這將會刪除 Google Sheet 與網頁上的全部 PO & OC 資料，此操作無法復原！</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger btn-sm px-4 fw-bold" onclick="clearAllData()">
+                    <i class="fa-solid fa-trash-can me-1"></i> 確定全部移除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbymrR5fZXMP0ZF9GG_efMMc0-kOWXsWpqA5Vk0wfbg-JJwKeKl4D-EvGvu-DwCIg2cu8g/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzn85_WF_CWaLAyRkGwy8IiJFXCR7kY8vMBsu9r1XAG6qAr6vT6q4ZGgrHiMvTP8y--pg/exec";
 
     const columns = [
         "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
@@ -523,10 +555,9 @@
         document.getElementById('ocForm').reset();
         document.getElementById('formAction').value = "add";
         document.getElementById('originalPO').value = "";
-        document.getElementById('input_PO').readOnly = false; // 新增時可自由填寫 PO
+        document.getElementById('input_PO').readOnly = false;
         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記 Order Confirmation (OC)`;
         
-        // 預設切回第一個 Customer 分頁
         const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
         firstTab.show();
 
@@ -539,7 +570,7 @@
         const row = JSON.parse(decodeURIComponent(encodedRowData));
         document.getElementById('formAction').value = "update";
         const currentPO = String(row["PO"] || '').trim();
-        document.getElementById('originalPO').value = currentPO; // 紀錄原本的 PO 用於定位刪除/更新
+        document.getElementById('originalPO').value = currentPO;
         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>修改 PO #${currentPO} 資料`;
 
         columns.forEach(col => {
@@ -553,16 +584,88 @@
             }
         });
 
-        // 核心修改：編輯時 PO 欄位改為可以任意編輯更改
         document.getElementById('input_PO').readOnly = false;
 
-        // 預設切回第一個 Customer 分頁
         const firstTab = new bootstrap.Tab(document.getElementById('customer-tab'));
         firstTab.show();
 
         const modalEl = document.getElementById('addOcModal');
         const modalObj = new bootstrap.Modal(modalEl);
         modalObj.show();
+    }
+
+    // 匯入 Excel 檔案處理邏輯
+    function handleFileImport(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(evt) {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const importedItems = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                if (importedItems.length === 0) {
+                    alert('匯入的檔案中沒有資料！');
+                    return;
+                }
+
+                if (confirm(`解析成功，共找到 ${importedItems.length} 筆資料，確定要全部匯入嗎？`)) {
+                    const syncStatus = document.getElementById('syncStatus');
+                    syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
+
+                    await fetch(GAS_API_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: "batchAdd", items: importedItems })
+                    });
+
+                    alert(`✅ 已成功匯入 ${importedItems.length} 筆資料！`);
+                    fetchLatestData();
+                }
+            } catch (err) {
+                alert('❌ 檔案解析失敗: ' + err.message);
+            } finally {
+                document.getElementById('excelFileInput').value = "";
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // 清空全部紀錄函數
+    async function clearAllData() {
+        const confirmModalEl = document.getElementById('clearConfirmModal');
+        const confirmModalObj = bootstrap.Modal.getInstance(confirmModalEl);
+        if (confirmModalObj) confirmModalObj.hide();
+
+        const syncStatus = document.getElementById('syncStatus');
+        syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-danger"></i> 清空資料中...`;
+
+        const params = new URLSearchParams({ action: "clearAll" });
+
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            });
+
+            alert('✅ 所有紀錄已全數清空！');
+            globalData = [];
+            localStorage.removeItem("oc_cache_data");
+
+            updateDashboard();
+            applyFilters();
+            syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已清空`;
+        } catch (err) {
+            alert('❌ 清空失敗: ' + err.message);
+            fetchLatestData();
+        }
     }
 
     async function deleteRow(poNumber) {
