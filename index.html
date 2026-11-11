@@ -7,7 +7,6 @@
     <!-- Bootstrap 5 CSS & FontAwesome Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -346,82 +345,15 @@
     </div>
 </div>
 
-<!-- 下拉選單 DataLists -->
-<datalist id="dl_Supplier">
-    <option value="Jesse Technology Pte Ltd">
-    <option value="Hootec Electronics Co., Ltd">
-    <option value="WUXI ZHUOHAI TECHNOLOGY CO.,LTD">
-    <option value="HS HI-TECH Co.,Ltd.">
-    <option value="QTS Corporation">
-    <option value="Cyun Chen Technology Co., Ltd">
-    <option value="ANTS應用奈米科技股份有限公司">
-    <option value="TSMC">
-</datalist>
-
-<datalist id="dl_Customer">
-    <option value="TSMC 3">
-    <option value="TSMC 5">
-    <option value="TSMC 8">
-    <option value="TSMC 12P1">
-    <option value="TSMC 15B">
-    <option value="TSMC 2 5">
-    <option value="TSMC 2 BSEM 4">
-    <option value="TSMC DEC.">
-    <option value="UMC 8C">
-    <option value="UMC 8D">
-    <option value="UMC 8E">
-    <option value="UMC 8F">
-    <option value="UMC 8F 8P">
-    <option value="UMC 8S">
-    <option value="UMC DEC.">
-    <option value="Mosel">
-</datalist>
-
-<datalist id="dl_Status">
-    <option value="Open">
-    <option value="PO Sent">
-    <option value="Completed">
-    <option value="Cancelled">
-    <option value="Partial Shipment">
-    <option value="Pending Payment">
-</datalist>
-
-<datalist id="dl_Currency">
-    <option value="USD">
-    <option value="TWD">
-    <option value="EUR">
-    <option value="JPY">
-</datalist>
-
-<datalist id="dl_Inco-terms">
-    <option value="EXW">
-    <option value="EXW Korea">
-    <option value="FOB">
-    <option value="CIF">
-    <option value="DDP">
-    <option value="NA">
-</datalist>
-
-<datalist id="dl_Cus. Region">
-    <option value="TW">
-    <option value="US">
-</datalist>
-
-<datalist id="dl_Created by">
-    <option value="Candice">
-    <option value="Ivy">
-    <option value="Joanne">
-</datalist>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 與 Google 試算表第 1 列完全相同的正確表頭陣列
+    // 嚴格對照 Excel 原檔欄位順序
     const sheetSchemas = {
         "Open PO (TW)": [
-            "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
+            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
             "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
             "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
             "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
@@ -477,22 +409,32 @@
         return val;
     }
 
-    // 精確取值（解決欄位誤判、錯位）
-    function getExactVal(row, col) {
+    // 核心取值：精確鎖定，若試算表有空格、特殊字元或分詞，直接智慧對齊
+    function getCellVal(row, colName) {
         if (!row) return '';
-        if (row[col] !== undefined && row[col] !== null && String(row[col]).trim() !== '') {
-            return row[col];
+        // 1. 完全精確比對
+        if (row[colName] !== undefined && row[colName] !== null && String(row[colName]).trim() !== '') {
+            return row[colName];
         }
-        // 僅允許有無 # 的備用匹配
-        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined) {
-            return row[col.slice(0, -1)];
+
+        // 2. 嚴格限定的同義欄位比對（絕不跨欄誤抓）
+        const aliases = {
+            'PO #': ['PO', 'PO#', 'PO NO'],
+            'Customer PO#': ['Customer PO', 'Customer PO#', 'Cus PO', 'Cus PO#'],
+            'OC#': ['OC', 'OC#', 'OC NO'],
+            'Cus. Region': ['Cus Region', 'Region'],
+            'Inco-terms': ['Incoterms', 'Inco-terms', 'Inco Terms'],
+            'Goods Received Date': ['Goods Received Date', 'GR Date'],
+            'Selling Price': ['Selling Price', 'Price'],
+            'Total Amount': ['Total Amount', 'Total']
+        };
+
+        const targetList = aliases[colName] || [];
+        for (let alias of targetList) {
+            if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') {
+                return row[alias];
+            }
         }
-        if (!col.endsWith('#') && row[col + '#'] !== undefined) {
-            return row[col + '#'];
-        }
-        // 針對 Cus. Region 與 Cus Region 容錯
-        if (col === 'Cus. Region' && row['Cus Region'] !== undefined) return row['Cus Region'];
-        if (col === 'Cus Region' && row['Cus. Region'] !== undefined) return row['Cus. Region'];
 
         return '';
     }
@@ -519,7 +461,7 @@
 
     async function fetchLatestData() {
         const syncStatus = document.getElementById('syncStatus');
-        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 正在連線...`;
+        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 正在連線讀取...`;
 
         try {
             const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}&_t=${new Date().getTime()}`, { 
@@ -546,9 +488,9 @@
         let totalAmount = 0;
 
         globalData.forEach(row => {
-            const status = String(getExactVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getExactVal(row, "OC#") || getExactVal(row, "OC") || "").trim();
-            const amt = parseFloat(getExactVal(row, "Total Amount") || getExactVal(row, "Selling Price") || getExactVal(row, "Amount")) || 0;
+            const status = String(getCellVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getCellVal(row, "OC#") || "").trim();
+            const amt = parseFloat(getCellVal(row, "Total Amount") || getCellVal(row, "Amount") || getCellVal(row, "Selling Price")) || 0;
 
             totalAmount += amt;
             if (ocVal !== "") ocCount++;
@@ -619,7 +561,7 @@
 
         data.forEach(row => {
             const tr = document.createElement('tr');
-            const rawStatus = String(getExactVal(row, "Status") || "").trim();
+            const rawStatus = String(getCellVal(row, "Status") || "").trim();
             const statusLower = rawStatus.toLowerCase();
             const rowIndex = row["_rowIndex"];
 
@@ -629,7 +571,7 @@
 
             let rowHtml = '';
             currentCols.forEach(col => {
-                let val = getExactVal(row, col);
+                let val = getCellVal(row, col);
 
                 if (col.toLowerCase().includes('date') || col === 'ETA') {
                     val = formatDateDisplay(val);
@@ -691,8 +633,8 @@
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
 
         const filtered = globalData.filter(row => {
-            const rawStatus = String(getExactVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getExactVal(row, "OC#") || getExactVal(row, "OC") || "").trim();
+            const rawStatus = String(getCellVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getCellVal(row, "OC#") || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -740,22 +682,18 @@
         cols.forEach(col => {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-md-6';
-            let val = getExactVal(data, col);
+            let val = getCellVal(data, col);
             
             if (col.toLowerCase().includes('date') || col === 'ETA') {
                 val = formatDateDisplay(val);
             }
-
-            const dl = document.getElementById(`dl_${col}`);
-            const listAttr = dl ? `list="${dl.id}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
             colDiv.innerHTML = `
                 <label class="form-label small fw-bold mb-1">${col}</label>
                 <input type="${col.toLowerCase().includes('date') ? 'date' : 'text'}" 
                        class="form-control form-control-sm" 
                        id="input_${col}" 
-                       value="${val}" 
-                       ${listAttr}>
+                       value="${val}">
             `;
             container.appendChild(colDiv);
         });
