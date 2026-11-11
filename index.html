@@ -13,6 +13,7 @@
             --primary-blue: #0f172a;
             --accent-blue: #2563eb;
             --bg-slate: #f1f5f9;
+            --modal-font-size: 14.5px; /* 可動態調節彈窗字體基準 */
         }
 
         html, body {
@@ -227,6 +228,40 @@
         }
 
         .text-right { text-align: right; }
+
+        /* 超大、清晰彈窗樣式升級 */
+        .modal-custom-size {
+            max-width: 92vw !important;
+            width: 1250px;
+        }
+        .modal-dialog-resizable {
+            resize: both;
+            overflow: hidden;
+            min-width: 600px;
+        }
+        .dynamic-field-label {
+            font-size: calc(var(--modal-font-size) - 1.5px);
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .dynamic-field-input {
+            font-size: var(--modal-font-size) !important;
+            padding: 7px 10px !important;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+        }
+        .dynamic-field-input:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .font-adjust-btn {
+            font-size: 12px;
+            padding: 2px 7px;
+            line-height: 1.2;
+        }
     </style>
 </head>
 <body>
@@ -322,22 +357,39 @@
     </div>
 </div>
 
-<!-- 新增/編輯 Modal -->
+<!-- 新增/編輯 Modal (超大字體、支援即時縮放與下拉建議) -->
 <div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white py-2">
-                <h6 class="modal-title fw-bold" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記資料</h6>
+    <div class="modal-dialog modal-custom-size modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white py-2 px-3 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                    <h5 class="modal-title fw-bold mb-0" id="modalTitle" style="font-size: 16px;">
+                        <i class="fa-solid fa-pen-to-square me-2 text-info"></i>登記資料
+                    </h5>
+                    <!-- 彈窗字體縮放切換器 -->
+                    <div class="btn-group btn-group-sm" role="group" title="調整表單字體大小">
+                        <button type="button" class="btn btn-outline-light font-adjust-btn" onclick="adjustModalFontSize(-1.5)">A -</button>
+                        <button type="button" class="btn btn-outline-light font-adjust-btn" onclick="adjustModalFontSize(1.5)">A +</button>
+                    </div>
+                </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-3 bg-light">
                 <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
                     <input type="hidden" id="formAction" value="add">
                     <input type="hidden" id="editingRowIndex" value="">
-                    <div class="row g-2" id="dynamicFormFields"></div>
-                    <div class="text-end mt-3">
-                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                        <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold" id="submitBtn">儲存寫入</button>
+                    
+                    <!-- 動態表單欄位 -->
+                    <div class="row g-3" id="dynamicFormFields"></div>
+
+                    <!-- 共用下拉提示資料庫 (Datalist container) -->
+                    <div id="datalistContainer"></div>
+
+                    <div class="text-end mt-4 pt-2 border-top">
+                        <button type="button" class="btn btn-secondary px-3 me-2" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm" id="submitBtn">
+                            <i class="fa-solid fa-floppy-disk me-1"></i> 儲存寫入
+                        </button>
                     </div>
                 </form>
             </div>
@@ -350,7 +402,6 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 實體欄位順序映射（A欄=0, B欄=1, C欄=2...）
     const sheetColumnMap = {
         "Open PO (TW)": [
             { title: "Date", idx: 0 },
@@ -399,6 +450,13 @@
     let currentSheetName = 'Open OC (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
+    let currentModalFontSize = 14.5; // 彈窗字體基準 (px)
+
+    // 彈窗字體縮放
+    function adjustModalFontSize(delta) {
+        currentModalFontSize = Math.max(12, Math.min(22, currentModalFontSize + delta));
+        document.documentElement.style.setProperty('--modal-font-size', currentModalFontSize + 'px');
+    }
 
     function formatDateDisplay(val) {
         if (val === undefined || val === null || val === '') return '';
@@ -440,23 +498,18 @@
         return val;
     }
 
-    // 核心取值：雙模相容讀取
+    // 雙模相容抓取
     function getCellVal(row, colIdx) {
         if (!row) return '';
-
-        // 1. 如果後端傳遞的是 cells 陣列
         if (Array.isArray(row.cells)) {
             const v = row.cells[colIdx];
             return (v !== undefined && v !== null) ? v : '';
         }
-
-        // 2. 如果後端傳遞的是物件，依鍵值順序讀取
         const keys = Object.keys(row).filter(k => !k.startsWith('_'));
         if (keys.length > colIdx) {
             const v = row[keys[colIdx]];
             if (v !== undefined && v !== null) return v;
         }
-
         return '';
     }
 
@@ -689,11 +742,52 @@
         XLSX.writeFile(workbook, `${currentSheetName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
+    // 智能提取歷史欄位內容，建立自動下拉清單
+    function buildDataLists() {
+        const datalistContainer = document.getElementById('datalistContainer');
+        datalistContainer.innerHTML = '';
+        const cols = sheetColumnMap[currentSheetName] || [];
+
+        cols.forEach(c => {
+            // 日期與金額等數值欄位不重複提示
+            const skipCols = ['Date', 'ETA', 'Goods Received Date', 'Inv Date', 'QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'];
+            if (skipCols.includes(c.title)) return;
+
+            const uniqueValues = new Set();
+            globalData.forEach(row => {
+                const val = String(getCellVal(row, c.idx) || '').trim();
+                if (val && val !== 'false' && val !== 'true' && val.length < 60) {
+                    uniqueValues.add(val);
+                }
+            });
+
+            // 為 Status 與 Currency 提供標準常用預設值
+            if (c.title === 'Status') {
+                ['Open', 'Completed', 'Cancelled', 'PO Sent', 'Partial Received', 'Partial Completed'].forEach(s => uniqueValues.add(s));
+            }
+            if (c.title === 'Currency') {
+                ['USD', 'NTD', 'TWD', 'EUR', 'JPY'].forEach(curr => uniqueValues.add(curr));
+            }
+            if (c.title === 'PAID') {
+                ['TRUE', 'FALSE'].forEach(p => uniqueValues.add(p));
+            }
+
+            const datalist = document.createElement('datalist');
+            datalist.id = `datalist_col_${c.idx}`;
+            uniqueValues.forEach(val => {
+                const option = document.createElement('option');
+                option.value = val;
+                datalist.appendChild(option);
+            });
+            datalistContainer.appendChild(datalist);
+        });
+    }
+
     function openModalForAdd() {
         buildDynamicForm({ cells: [] });
         document.getElementById('formAction').value = "add";
         document.getElementById('editingRowIndex').value = "";
-        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記至 ${currentSheetName}`;
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2 text-info"></i>登記至 ${currentSheetName}`;
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
@@ -702,30 +796,49 @@
         buildDynamicForm(row);
         document.getElementById('formAction').value = "update";
         document.getElementById('editingRowIndex').value = row._rowIndex;
-        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>編輯紀錄 (Row #${row._rowIndex})`;
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2 text-warning"></i>編輯紀錄 (Row #${row._rowIndex})`;
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
+    // 建構彈出視窗欄位與綁定下拉式選單 (Datalist)
     function buildDynamicForm(data) {
+        buildDataLists();
         const container = document.getElementById('dynamicFormFields');
         container.innerHTML = '';
         const cols = sheetColumnMap[currentSheetName] || [];
 
         cols.forEach(c => {
             const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-6';
-            let val = getCellVal(data, c.idx);
             
-            if (c.title.toLowerCase().includes('date') || c.title === 'ETA') {
+            // Description 與 Remark 欄位寬度佔滿 12 格，其他標準欄位各佔 6 格
+            if (['Description', 'Remark'].includes(c.title)) {
+                colDiv.className = 'col-md-12';
+            } else {
+                colDiv.className = 'col-md-6';
+            }
+
+            let val = getCellVal(data, c.idx);
+            const isDateCol = c.title.toLowerCase().includes('date') || c.title === 'ETA';
+            if (isDateCol) {
                 val = formatDateDisplay(val);
             }
 
+            // 是否有對應的自動補完下拉清單
+            const hasDatalist = document.getElementById(`datalist_col_${c.idx}`);
+            const listAttr = hasDatalist ? `list="datalist_col_${c.idx}"` : '';
+
             colDiv.innerHTML = `
-                <label class="form-label small fw-bold mb-1">${c.title}</label>
-                <input type="${c.title.toLowerCase().includes('date') ? 'date' : 'text'}" 
-                       class="form-control form-control-sm" 
+                <label class="dynamic-field-label">
+                    <span>${c.title}</span>
+                    ${hasDatalist ? '<small class="text-primary fw-normal" style="font-size: 11px;"><i class="fa-solid fa-chevron-down me-1"></i>支援快速打字/下拉</small>' : ''}
+                </label>
+                <input type="${isDateCol ? 'date' : 'text'}" 
+                       class="form-control dynamic-field-input" 
                        id="input_col_${c.idx}" 
-                       value="${val}">
+                       value="${val}" 
+                       ${listAttr} 
+                       autocomplete="off" 
+                       placeholder="請輸入或選擇 ${c.title}...">
             `;
             container.appendChild(colDiv);
         });
@@ -741,7 +854,7 @@
         const cellsPayload = [];
         cols.forEach(c => {
             const el = document.getElementById(`input_col_${c.idx}`);
-            cellsPayload.push(el ? el.value : "");
+            cellsPayload.push(el ? el.value.trim() : "");
         });
 
         const payload = {
