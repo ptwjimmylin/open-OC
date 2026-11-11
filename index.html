@@ -296,6 +296,48 @@
         </div>
     </div>
 
+    <!-- 年度切換與跨年統計控制列 -->
+    <div class="d-flex justify-content-between align-items-center bg-white px-3 py-2 rounded border flex-shrink-0 shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark"><i class="fa-solid fa-calendar-days text-primary me-1"></i> 統計年度 (Year)：</span>
+            <select id="yearSelect" class="form-select form-select-sm fw-bold" style="width: 150px;" onchange="onYearChange(this.value)">
+                <option value="ALL">全部年度 (ALL)</option>
+            </select>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary btn-sm fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#yearSummaryPanel">
+                <i class="fa-solid fa-chart-column me-1"></i> 查看歷年數據對比表
+            </button>
+        </div>
+    </div>
+
+    <!-- 可展開的年度統計摘要面板 -->
+    <div class="collapse flex-shrink-0" id="yearSummaryPanel">
+        <div class="card card-body p-2 border shadow-sm bg-white">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <h6 class="fw-bold mb-0 text-primary" style="font-size: 13px;">
+                    <i class="fa-solid fa-table-list me-1"></i> <span id="summarySheetTitle">Open OC (TW)</span> 歷年數據對照
+                </h6>
+                <small class="text-muted">點擊任一年份可直接快速篩選</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered text-center align-middle mb-0" style="font-size: 12px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>年份 (Year)</th>
+                            <th>總筆數 (Total)</th>
+                            <th>Open 未結案</th>
+                            <th>已結案 (Completed)</th>
+                            <th>已取消 (Cancelled)</th>
+                            <th>年度總金額 (Total Amount)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="yearSummaryTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- 儀表板卡片 -->
     <div class="row g-2 flex-shrink-0">
         <div class="col-md-3">
@@ -466,8 +508,8 @@
     let currentSheetName = 'Open OC (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
+    let selectedYear = 'ALL'; // 目前選取年度
 
-    // 讀取並初始化持久化設定
     function loadSavedSettings() {
         const savedFontSize = localStorage.getItem('ptw_modal_font_size') || '14.5';
         const savedWidth = localStorage.getItem('ptw_modal_width') || '1200';
@@ -485,21 +527,18 @@
         if (wsv) wsv.innerText = savedWidth;
     }
 
-    // 滑桿響應：字體大小
     function onFontSizeSliderChange(val) {
         document.documentElement.style.setProperty('--modal-font-size', val + 'px');
         document.getElementById('fontSliderVal').innerText = val;
         localStorage.setItem('ptw_modal_font_size', val);
     }
 
-    // 滑桿響應：彈窗寬度
     function onWidthSliderChange(val) {
         document.documentElement.style.setProperty('--modal-dialog-width', val + 'px');
         document.getElementById('widthSliderVal').innerText = val;
         localStorage.setItem('ptw_modal_width', val);
     }
 
-    // 欄寬持久化儲存與讀取
     function getStoredColWidth(sheetName, colTitle, fallback) {
         const storageKey = `ptw_colwidth_${sheetName}_${colTitle}`;
         const saved = localStorage.getItem(storageKey);
@@ -609,6 +648,7 @@
 
             if (Array.isArray(data)) {
                 globalData = data;
+                populateYearOptions();
                 updateDashboard();
                 applyFilters();
                 syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步 (${currentSheetName})`;
@@ -621,7 +661,110 @@
         }
     }
 
+    // 動態掃描資料提取所有年份並更新年度下拉選單與對比表
+    function populateYearOptions() {
+        const yearSelect = document.getElementById('yearSelect');
+        const prevVal = yearSelect.value;
+        const yearsSet = new Set();
+
+        globalData.forEach(row => {
+            const rawDate = String(getCellVal(row, 0) || '').trim(); // 0 = Date
+            const match = rawDate.match(/^(\d{4})/);
+            if (match) {
+                yearsSet.add(match[1]);
+            }
+        });
+
+        const sortedYears = Array.from(yearsSet).sort().reverse();
+
+        yearSelect.innerHTML = `<option value="ALL">全部年度 (ALL)</option>`;
+        sortedYears.forEach(y => {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = `${y} 年度`;
+            yearSelect.appendChild(opt);
+        });
+
+        if (sortedYears.includes(prevVal)) {
+            yearSelect.value = prevVal;
+            selectedYear = prevVal;
+        } else {
+            yearSelect.value = 'ALL';
+            selectedYear = 'ALL';
+        }
+
+        renderYearSummaryTable(sortedYears);
+    }
+
+    function onYearChange(val) {
+        selectedYear = val;
+        updateDashboard();
+        applyFilters();
+    }
+
+    function setFilterYearDirect(y) {
+        const yearSelect = document.getElementById('yearSelect');
+        yearSelect.value = y;
+        onYearChange(y);
+    }
+
+    // 渲染歷年數據對比表
+    function renderYearSummaryTable(sortedYears) {
+        const tbody = document.getElementById('yearSummaryTableBody');
+        tbody.innerHTML = '';
+        document.getElementById('summarySheetTitle').innerText = currentSheetName;
+
+        const isOC = (currentSheetName === 'Open OC (TW)');
+        const statusIdx = isOC ? 9 : 10;
+        const amtIdx = isOC ? 13 : 14;
+
+        const statsByYear = {};
+        sortedYears.forEach(y => {
+            statsByYear[y] = { total: 0, open: 0, completed: 0, cancelled: 0, amount: 0 };
+        });
+
+        globalData.forEach(row => {
+            const rawDate = String(getCellVal(row, 0) || '').trim();
+            const match = rawDate.match(/^(\d{4})/);
+            if (!match || !statsByYear[match[1]]) return;
+
+            const y = match[1];
+            const status = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
+            const rawAmt = String(getCellVal(row, amtIdx) || '0').replace(/,/g, '');
+            const amt = parseFloat(rawAmt) || 0;
+
+            statsByYear[y].total++;
+            statsByYear[y].amount += amt;
+
+            if (status === 'completed') {
+                statsByYear[y].completed++;
+            } else if (status === 'cancelled') {
+                statsByYear[y].cancelled++;
+            } else {
+                statsByYear[y].open++;
+            }
+        });
+
+        sortedYears.forEach(y => {
+            const s = statsByYear[y];
+            const tr = document.createElement('tr');
+            tr.style.cursor = 'pointer';
+            tr.title = `點擊只看 ${y} 年資料`;
+            tr.onclick = () => setFilterYearDirect(y);
+            tr.innerHTML = `
+                <td class="fw-bold text-primary">${y} 年</td>
+                <td class="fw-bold">${s.total}</td>
+                <td class="text-warning fw-bold">${s.open}</td>
+                <td class="text-success">${s.completed}</td>
+                <td class="text-muted">${s.cancelled}</td>
+                <td class="fw-bold text-end pe-3">$${s.amount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
     function updateDashboard() {
+        let totalCount = 0;
         let openCount = 0;
         let ocCount = 0;
         let totalAmount = 0;
@@ -632,6 +775,13 @@
         const amtIdx = isOC ? 13 : 14;
 
         globalData.forEach(row => {
+            // 年度篩選
+            const rawDate = String(getCellVal(row, 0) || '').trim();
+            if (selectedYear !== 'ALL' && !rawDate.startsWith(selectedYear)) {
+                return;
+            }
+
+            totalCount++;
             const status = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
             const ocVal = String(getCellVal(row, ocIdx) || "").trim();
             const rawAmt = String(getCellVal(row, amtIdx) || '0').replace(/,/g, '');
@@ -644,7 +794,7 @@
             }
         });
 
-        document.getElementById('statTotal').innerText = globalData.length;
+        document.getElementById('statTotal').innerText = totalCount;
         document.getElementById('statOpen').innerText = openCount;
         document.getElementById('statConfirmed').innerText = ocCount;
         document.getElementById('statTotalAmount').innerText = '$' + totalAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
@@ -659,7 +809,6 @@
             const th = document.createElement('th');
             th.textContent = c.title;
 
-            // 讀取記住的寬度
             const w = getStoredColWidth(currentSheetName, c.title, c.defaultW);
             th.style.width = w + 'px';
             th.style.minWidth = w + 'px';
@@ -679,7 +828,6 @@
         headerTr.appendChild(actionTh);
     }
 
-    // 拖曳調整欄寬並永久寫入 LocalStorage
     function initColResize(e, th, colTitle) {
         e.stopPropagation();
         const startX = e.pageX;
@@ -698,7 +846,6 @@
             resizer.classList.remove('resizing');
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
-            // 永久記憶該欄寬
             saveColWidth(currentSheetName, colTitle, finalWidth);
         }
 
@@ -787,6 +934,13 @@
         const ocIdx = isOC ? 1 : 5;
 
         const filtered = globalData.filter(row => {
+            // 1. 年度過濾
+            const rawDate = String(getCellVal(row, 0) || '').trim();
+            if (selectedYear !== 'ALL' && !rawDate.startsWith(selectedYear)) {
+                return false;
+            }
+
+            // 2. 狀態過濾
             const rawStatus = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
             const ocVal = String(getCellVal(row, ocIdx) || "").trim();
             
@@ -796,6 +950,7 @@
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
+            // 3. 關鍵字搜尋
             const rowValues = Array.isArray(row.cells) ? row.cells : Object.values(row);
             let matchesKeyword = rowValues.some(v => String(v).toLowerCase().includes(keyword));
             return matchesStatus && matchesKeyword;
