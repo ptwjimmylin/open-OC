@@ -241,21 +241,16 @@
         <div class="d-flex gap-2 align-items-center">
             <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
             
+            <button class="btn btn-outline-primary btn-sm fw-bold px-2" onclick="forceReloadData()">
+                <i class="fa-solid fa-rotate me-1"></i> 強制重新整理
+            </button>
+
             <button class="btn btn-primary btn-sm fw-bold px-2" onclick="openModalForAdd()">
                 <i class="fa-solid fa-plus me-1"></i> 登記新紀錄
             </button>
 
-            <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFileImport(event)">
-            <button class="btn btn-outline-secondary btn-sm fw-bold px-2" onclick="document.getElementById('excelFileInput').click()">
-                <i class="fa-solid fa-file-import me-1"></i> 匯入 Excel
-            </button>
-
             <button class="btn btn-outline-success btn-sm fw-bold px-2" onclick="exportToExcel()">
                 <i class="fa-solid fa-file-excel me-1"></i> 匯出目前 Sheet
-            </button>
-
-            <button class="btn btn-outline-danger btn-sm fw-bold px-2" data-bs-toggle="modal" data-bs-target="#clearConfirmModal">
-                <i class="fa-solid fa-trash-arrow-up me-1"></i> 清空當前 Sheet
             </button>
         </div>
     </div>
@@ -276,14 +271,14 @@
         </div>
         <div class="col-md-3">
             <button class="stat-card-btn" id="btnDashOC" style="border-left: 4px solid #0284c7;" onclick="filterByStatus('HAS_OC', this)">
-                <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已有 OC 單號</div>
+                <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC 筆數</div>
                 <div class="stat-value text-info" id="statConfirmed">0</div>
             </button>
         </div>
         <div class="col-md-3">
             <div class="stat-card-btn" style="border-left: 4px solid #10b981; cursor: default;">
-                <div class="stat-title"><i class="fa-solid fa-dollar-sign me-1 text-success"></i> Open 未結案金額 (USD)</div>
-                <div class="stat-value text-success" id="statOpenAmount">$0</div>
+                <div class="stat-title"><i class="fa-solid fa-dollar-sign me-1 text-success"></i> 總金額 (Total Amount)</div>
+                <div class="stat-value text-success" id="statTotalAmount">$0</div>
             </div>
         </div>
     </div>
@@ -291,12 +286,12 @@
     <!-- 工作表頁籤 -->
     <ul class="nav nav-tabs sheet-tabs flex-shrink-0" id="sheetTabs" role="tablist">
         <li class="nav-item">
-            <button class="nav-link active" id="tab-po" onclick="switchSheet('Open PO (TW)')">
+            <button class="nav-link" id="tab-po" onclick="switchSheet('Open PO (TW)')">
                 <i class="fa-solid fa-file-invoice me-1"></i> Open PO (TW)
             </button>
         </li>
         <li class="nav-item">
-            <button class="nav-link" id="tab-oc" onclick="switchSheet('Open OC (TW)')">
+            <button class="nav-link active" id="tab-oc" onclick="switchSheet('Open OC (TW)')">
                 <i class="fa-solid fa-file-signature me-1"></i> Open OC (TW)
             </button>
         </li>
@@ -361,8 +356,6 @@
     <option value="Cyun Chen Technology Co., Ltd">
     <option value="ANTS應用奈米科技股份有限公司">
     <option value="TSMC">
-    <option value="PTW SpinTec GmbH">
-    <option value="Cin Tai">
 </datalist>
 
 <datalist id="dl_Customer">
@@ -420,33 +413,15 @@
     <option value="Joanne">
 </datalist>
 
-<!-- 清空確認 Modal -->
-<div class="modal fade" id="clearConfirmModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white py-2">
-                <h6 class="modal-title fw-bold">清空確認</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body text-center py-3">
-                <p class="mb-0 text-muted">確定要清空當前工作表所有資料嗎？</p>
-            </div>
-            <div class="modal-footer py-1">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-danger btn-sm" onclick="clearCurrentSheet()">確定清空</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
+    // 與 Google 試算表第 1 列完全相同的正確表頭陣列
     const sheetSchemas = {
         "Open PO (TW)": [
-            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
+            "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
             "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
             "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
             "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
@@ -458,7 +433,7 @@
         ]
     };
 
-    let currentSheetName = 'Open PO (TW)';
+    let currentSheetName = 'Open OC (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
 
@@ -502,32 +477,35 @@
         return val;
     }
 
-    function getRowVal(row, col) {
+    // 精確取值（解決欄位誤判、錯位）
+    function getExactVal(row, col) {
         if (!row) return '';
-        if (row[col] !== undefined && row[col] !== '') return row[col];
-        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined && row[col.slice(0, -1)] !== '') return row[col.slice(0, -1)];
-        if (!col.endsWith('#') && row[col + '#'] !== undefined && row[col + '#'] !== '') return row[col + '#'];
-
-        const cleanCol = col.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        for (let k in row) {
-            if (k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanCol && row[k] !== undefined && row[k] !== '') {
-                return row[k];
-            }
+        if (row[col] !== undefined && row[col] !== null && String(row[col]).trim() !== '') {
+            return row[col];
         }
+        // 僅允許有無 # 的備用匹配
+        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined) {
+            return row[col.slice(0, -1)];
+        }
+        if (!col.endsWith('#') && row[col + '#'] !== undefined) {
+            return row[col + '#'];
+        }
+        // 針對 Cus. Region 與 Cus Region 容錯
+        if (col === 'Cus. Region' && row['Cus Region'] !== undefined) return row['Cus Region'];
+        if (col === 'Cus Region' && row['Cus. Region'] !== undefined) return row['Cus. Region'];
+
         return '';
     }
 
     function initApp() {
         renderHeader();
-        const cached = localStorage.getItem(`oc_cache_${currentSheetName}`);
-        if (cached) {
-            try {
-                globalData = JSON.parse(cached);
-                updateDropdownsFromDatabase();
-                updateDashboard();
-                renderRows(globalData);
-            } catch (e) {}
-        }
+        fetchLatestData();
+    }
+
+    function forceReloadData() {
+        localStorage.clear();
+        globalData = [];
+        renderRows([]);
         fetchLatestData();
     }
 
@@ -541,7 +519,7 @@
 
     async function fetchLatestData() {
         const syncStatus = document.getElementById('syncStatus');
-        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 同步中...`;
+        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 正在連線...`;
 
         try {
             const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}&_t=${new Date().getTime()}`, { 
@@ -552,11 +530,9 @@
 
             if (Array.isArray(data)) {
                 globalData = data;
-                localStorage.setItem(`oc_cache_${currentSheetName}`, JSON.stringify(data));
-                updateDropdownsFromDatabase();
                 updateDashboard();
                 applyFilters();
-                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步`;
+                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步 (${currentSheetName})`;
             }
         } catch (err) {
             console.error(err);
@@ -564,53 +540,27 @@
         }
     }
 
-    function updateDropdownsFromDatabase() {
-        if (!Array.isArray(globalData) || globalData.length === 0) return;
-
-        const targetFields = ['Supplier', 'Customer', 'Status', 'Currency', 'Inco-terms', 'Cus. Region', 'Created by'];
-
-        targetFields.forEach(field => {
-            const dl = document.getElementById(`dl_${field}`);
-            if (!dl) return;
-
-            const existingValues = new Set(Array.from(dl.options).map(opt => opt.value.trim().toLowerCase()));
-
-            globalData.forEach(row => {
-                const val = getRowVal(row, field);
-                if (val && typeof val === 'string') {
-                    const cleanVal = val.trim();
-                    if (cleanVal && !existingValues.has(cleanVal.toLowerCase())) {
-                        existingValues.add(cleanVal.toLowerCase());
-                        const opt = document.createElement('option');
-                        opt.value = cleanVal;
-                        dl.appendChild(opt);
-                    }
-                }
-            });
-        });
-    }
-
     function updateDashboard() {
         let openCount = 0;
         let ocCount = 0;
-        let openAmount = 0;
+        let totalAmount = 0;
 
         globalData.forEach(row => {
-            const status = String(getRowVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getRowVal(row, "OC#") || "").trim();
-            const amt = parseFloat(getRowVal(row, "Total Amount") || getRowVal(row, "Amount") || getRowVal(row, "Selling Price")) || 0;
+            const status = String(getExactVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getExactVal(row, "OC#") || getExactVal(row, "OC") || "").trim();
+            const amt = parseFloat(getExactVal(row, "Total Amount") || getExactVal(row, "Selling Price") || getExactVal(row, "Amount")) || 0;
 
+            totalAmount += amt;
             if (ocVal !== "") ocCount++;
             if (status !== 'completed' && status !== 'cancelled') {
                 openCount++;
-                openAmount += amt;
             }
         });
 
         document.getElementById('statTotal').innerText = globalData.length;
         document.getElementById('statOpen').innerText = openCount;
         document.getElementById('statConfirmed').innerText = ocCount;
-        document.getElementById('statOpenAmount').innerText = '$' + openAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+        document.getElementById('statTotalAmount').innerText = '$' + totalAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
     }
 
     function renderHeader() {
@@ -669,7 +619,7 @@
 
         data.forEach(row => {
             const tr = document.createElement('tr');
-            const rawStatus = String(getRowVal(row, "Status") || "").trim();
+            const rawStatus = String(getExactVal(row, "Status") || "").trim();
             const statusLower = rawStatus.toLowerCase();
             const rowIndex = row["_rowIndex"];
 
@@ -679,7 +629,7 @@
 
             let rowHtml = '';
             currentCols.forEach(col => {
-                let val = getRowVal(row, col);
+                let val = getExactVal(row, col);
 
                 if (col.toLowerCase().includes('date') || col === 'ETA') {
                     val = formatDateDisplay(val);
@@ -741,8 +691,8 @@
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
 
         const filtered = globalData.filter(row => {
-            const rawStatus = String(getRowVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getRowVal(row, "OC#") || "").trim();
+            const rawStatus = String(getExactVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getExactVal(row, "OC#") || getExactVal(row, "OC") || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -755,75 +705,6 @@
         });
 
         renderRows(filtered);
-    }
-
-    // 核心匯入：直接以完整二維陣列覆蓋，徹底修復欄位錯位與缺失
-    function handleFileImport(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async function(evt) {
-            try {
-                const data = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-
-                const syncStatus = document.getElementById('syncStatus');
-                syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 正確重整匯入中...`;
-
-                for (const sheetName of workbook.SheetNames) {
-                    const sLower = sheetName.toLowerCase().trim();
-                    let targetSheet = null;
-                    if (sLower === "open po (tw)" || sLower.includes("po")) targetSheet = "Open PO (TW)";
-                    else if (sLower === "open oc (tw)" || sLower.includes("oc")) targetSheet = "Open OC (TW)";
-                    else continue;
-
-                    const worksheet = workbook.Sheets[sheetName];
-                    const targetCols = sheetSchemas[targetSheet];
-
-                    // 將 Excel 讀取為原始二維陣列
-                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
-                    if (rawRows.length > 0) {
-                        const matrix = [targetCols]; // 第 1 列是標準表頭
-
-                        rawRows.forEach(r => {
-                            const rowData = [];
-                            targetCols.forEach(col => {
-                                let v = getRowVal(r, col);
-                                if (v instanceof Date) {
-                                    v = formatDateDisplay(v);
-                                } else if (typeof v === 'number' && col.toLowerCase().includes('date')) {
-                                    v = formatDateDisplay(v);
-                                }
-                                rowData.push(v !== undefined && v !== null ? v : "");
-                            });
-                            matrix.push(rowData);
-                        });
-
-                        await fetch(GAS_API_URL, {
-                            method: 'POST',
-                            mode: 'no-cors',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                action: "overwriteSheet",
-                                sheetName: targetSheet,
-                                matrix: matrix
-                            })
-                        });
-                    }
-                }
-
-                alert(`✅ 資料已完美校正並匯入完畢！`);
-                localStorage.clear();
-                fetchLatestData();
-            } catch (err) {
-                alert('❌ 檔案匯入失敗: ' + err.message);
-            } finally {
-                document.getElementById('excelFileInput').value = "";
-            }
-        };
-        reader.readAsArrayBuffer(file);
     }
 
     function exportToExcel() {
@@ -859,14 +740,13 @@
         cols.forEach(col => {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-md-6';
-            let val = getRowVal(data, col);
+            let val = getExactVal(data, col);
             
             if (col.toLowerCase().includes('date') || col === 'ETA') {
                 val = formatDateDisplay(val);
             }
 
-            const cleanField = col.replace(/[^a-zA-Z0-9]/g, '');
-            const dl = document.getElementById(`dl_${col}`) || document.getElementById(`dl_${cleanField}`);
+            const dl = document.getElementById(`dl_${col}`);
             const listAttr = dl ? `list="${dl.id}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
             colDiv.innerHTML = `
@@ -896,10 +776,7 @@
         const cols = sheetSchemas[currentSheetName] || [];
         cols.forEach(col => {
             const el = document.getElementById(`input_${col}`);
-            const val = el ? el.value : "";
-            payload[col] = val;
-            if (col.endsWith('#')) payload[col.slice(0, -1)] = val;
-            else payload[col + '#'] = val;
+            payload[col] = el ? el.value : "";
         });
 
         try {
@@ -931,21 +808,6 @@
             fetchLatestData();
         } catch (err) {
             alert('❌ 刪除失敗');
-        }
-    }
-
-    async function clearCurrentSheet() {
-        bootstrap.Modal.getInstance(document.getElementById('clearConfirmModal')).hide();
-        try {
-            await fetch(GAS_API_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: "clearAll", sheetName: currentSheetName })
-            });
-            fetchLatestData();
-        } catch (err) {
-            alert('❌ 清空失敗');
         }
     }
 
