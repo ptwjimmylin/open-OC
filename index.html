@@ -27,7 +27,6 @@
             color: #334155;
         }
 
-        /* 視窗滿版容器 */
         .app-wrapper {
             display: flex;
             flex-direction: column;
@@ -220,7 +219,8 @@
             white-space: nowrap;
         }
         .badge-open { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
-        .badge-confirmed { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+        .badge-posent { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+        .badge-partial { background-color: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
         .badge-completed { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
         .badge-cancelled { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
 
@@ -278,8 +278,8 @@
             </button>
         </div>
         <div class="col-md-3">
-            <button class="stat-card-btn" id="btnDashCONFIRMED" style="border-left: 4px solid #0284c7;" onclick="filterByStatus('CONFIRMED', this)">
-                <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC</div>
+            <button class="stat-card-btn" id="btnDashOC" style="border-left: 4px solid #0284c7;" onclick="filterByStatus('HAS_OC', this)">
+                <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已有 OC 單號</div>
                 <div class="stat-value text-info" id="statConfirmed">0</div>
             </button>
         </div>
@@ -311,7 +311,7 @@
             <div class="btn-group btn-group-sm" role="group">
                 <button type="button" class="btn btn-outline-secondary active" id="btnFilterALL" onclick="filterByStatus('ALL', this)">全部</button>
                 <button type="button" class="btn btn-outline-warning" id="btnFilterOPEN" onclick="filterByStatus('OPEN', this)">🔥 Open</button>
-                <button type="button" class="btn btn-outline-info" id="btnFilterCONFIRMED" onclick="filterByStatus('CONFIRMED', this)">☑️ 已做 OC</button>
+                <button type="button" class="btn btn-outline-info" id="btnFilterHAS_OC" onclick="filterByStatus('HAS_OC', this)">☑️ 已做 OC</button>
                 <button type="button" class="btn btn-outline-success" id="btnFilterCOMPLETED" onclick="filterByStatus('COMPLETED', this)">✅ 已完成</button>
                 <button type="button" class="btn btn-outline-danger" id="btnFilterCANCELLED" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
             </div>
@@ -447,7 +447,7 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 支援 PO 與 PO #、Customer PO 與 Customer PO#
+    // 統一雙向支援 PO / PO# 與 Customer PO / Customer PO#
     const sheetSchemas = {
         "Open PO (TW)": [
             "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
@@ -466,7 +466,6 @@
     let globalData = [];
     let activeFilter = 'ALL';
 
-    // 格式化日期
     function formatDateDisplay(val) {
         if (val === undefined || val === null || val === '') return '';
         
@@ -507,13 +506,13 @@
         return val;
     }
 
-    // 智慧取得物件值（容許 PO vs PO #, Customer PO vs Customer PO# 等）
+    // 欄位容錯讀取（徹底解決 Customer PO vs Customer PO# 抓不到值問題）
     function getRowVal(row, col) {
         if (!row) return '';
         if (row[col] !== undefined && row[col] !== '') return row[col];
         if (row[col + '#'] !== undefined && row[col + '#'] !== '') return row[col + '#'];
         if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined) return row[col.slice(0, -1)];
-        // 去除空格與符號比對
+
         const cleanCol = col.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         for (let k in row) {
             if (k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanCol) {
@@ -570,7 +569,6 @@
         }
     }
 
-    // 從資料庫歷史紀錄動態更新下拉選單
     function updateDropdownsFromDatabase() {
         if (!Array.isArray(globalData) || globalData.length === 0) return;
 
@@ -599,7 +597,7 @@
 
     function updateDashboard() {
         let openCount = 0;
-        let confirmedCount = 0;
+        let ocCount = 0;
         let openAmount = 0;
 
         globalData.forEach(row => {
@@ -607,7 +605,7 @@
             const ocVal = String(getRowVal(row, "OC") || "").trim();
             const amt = parseFloat(getRowVal(row, "Amount") || getRowVal(row, "Total Amount") || getRowVal(row, "Selling Price")) || 0;
 
-            if (ocVal !== "") confirmedCount++;
+            if (ocVal !== "") ocCount++;
             if (status !== 'completed' && status !== 'cancelled') {
                 openCount++;
                 openAmount += amt;
@@ -616,7 +614,7 @@
 
         document.getElementById('statTotal').innerText = globalData.length;
         document.getElementById('statOpen').innerText = openCount;
-        document.getElementById('statConfirmed').innerText = confirmedCount;
+        document.getElementById('statConfirmed').innerText = ocCount;
         document.getElementById('statOpenAmount').innerText = '$' + openAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
     }
 
@@ -627,7 +625,8 @@
 
         currentCols.forEach((col) => {
             const th = document.createElement('th');
-            th.textContent = col;
+            // 表頭顯示標籤（若是 PO 則顯示 PO #）
+            th.textContent = (col === 'PO' || col === 'OC' || col === 'Customer PO') ? col + '#' : col;
             if (col.toLowerCase().includes('date')) {
                 th.classList.add('col-date');
             }
@@ -669,6 +668,7 @@
         window.addEventListener('mouseup', onMouseUp);
     }
 
+    // 渲染表格內容：真實呈現 Excel 原本的狀態值（取消強制替換成 Confirmed）
     function renderRows(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -678,7 +678,6 @@
             const tr = document.createElement('tr');
             const rawStatus = String(getRowVal(row, "Status") || "").trim();
             const statusLower = rawStatus.toLowerCase();
-            const ocVal = String(getRowVal(row, "OC") || "").trim();
             const rowIndex = row["_rowIndex"];
 
             if (statusLower === 'cancelled') {
@@ -693,15 +692,18 @@
                     val = formatDateDisplay(val);
                 }
 
+                // 忠實顯示 Excel 中的真實狀態，並賦予對應顏色標籤
                 if (col === 'Status') {
                     if (statusLower === 'completed') {
                         val = `<span class="badge-status badge-completed"><i class="fa-solid fa-check"></i> Completed</span>`;
                     } else if (statusLower === 'cancelled') {
                         val = `<span class="badge-status badge-cancelled"><i class="fa-solid fa-xmark"></i> Cancelled</span>`;
-                    } else if (ocVal !== '') {
-                        val = `<span class="badge-status badge-confirmed"><i class="fa-solid fa-file-circle-check"></i> Confirmed</span>`;
+                    } else if (statusLower.includes('partial')) {
+                        val = `<span class="badge-status badge-partial"><i class="fa-solid fa-boxes-packing"></i> ${rawStatus}</span>`;
+                    } else if (statusLower.includes('sent')) {
+                        val = `<span class="badge-status badge-posent"><i class="fa-solid fa-paper-plane"></i> ${rawStatus}</span>`;
                     } else {
-                        val = `<span class="badge-status badge-open"><i class="fa-solid fa-clock"></i> Open</span>`;
+                        val = `<span class="badge-status badge-open"><i class="fa-solid fa-clock"></i> ${rawStatus || 'Open'}</span>`;
                     }
                 }
 
@@ -735,7 +737,7 @@
         document.querySelectorAll('.stat-card-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
 
-        const dashBtn = document.getElementById(`btnDash${type}`);
+        const dashBtn = document.getElementById(`btnDash${type === 'HAS_OC' ? 'OC' : type}`);
         const filterBtn = document.getElementById(`btnFilter${type}`);
         if (dashBtn) dashBtn.classList.add('active');
         if (filterBtn) filterBtn.classList.add('active');
@@ -752,7 +754,7 @@
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
-            if (activeFilter === 'CONFIRMED') matchesStatus = (ocVal !== "");
+            if (activeFilter === 'HAS_OC') matchesStatus = (ocVal !== "");
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
@@ -763,7 +765,6 @@
         renderRows(filtered);
     }
 
-    // 智慧匯入：支援 PO# 自動對齊 PO、精確分頁
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -779,11 +780,10 @@
 
                 for (const sheetName of workbook.SheetNames) {
                     const sLower = sheetName.toLowerCase();
-                    // 只精準匯入包含 po 或 oc 的工作表
                     let targetSheet = null;
                     if (sLower.includes("po")) targetSheet = "Open PO (TW)";
                     else if (sLower.includes("oc")) targetSheet = "Open OC (TW)";
-                    else continue; // 略過 Sheet1、NEW 等其他分頁
+                    else continue;
 
                     const worksheet = workbook.Sheets[sheetName];
                     const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
@@ -853,7 +853,6 @@
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
-    // 動態產生欄位並掛載下拉選單 (datalist)
     function buildDynamicForm(data) {
         const container = document.getElementById('dynamicFormFields');
         container.innerHTML = '';
@@ -872,7 +871,7 @@
             const listAttr = dl ? `list="dl_${col}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
             colDiv.innerHTML = `
-                <label class="form-label small fw-bold mb-1">${col}</label>
+                <label class="form-label small fw-bold mb-1">${(col === 'PO' || col === 'OC' || col === 'Customer PO') ? col + '#' : col}</label>
                 <input type="${col.toLowerCase().includes('date') ? 'date' : 'text'}" 
                        class="form-control form-control-sm" 
                        id="input_${col}" 
