@@ -13,7 +13,8 @@
             --primary-blue: #0f172a;
             --accent-blue: #2563eb;
             --bg-slate: #f1f5f9;
-            --modal-font-size: 14.5px; /* 可動態調節彈窗字體基準 */
+            --modal-font-size: 14.5px;
+            --modal-dialog-width: 1200px;
         }
 
         html, body {
@@ -157,7 +158,7 @@
             right: 0;
             top: 0;
             bottom: 0;
-            width: 6px;
+            width: 7px;
             cursor: col-resize;
             user-select: none;
             background-color: transparent;
@@ -229,15 +230,11 @@
 
         .text-right { text-align: right; }
 
-        /* 超大、清晰彈窗樣式升級 */
-        .modal-custom-size {
-            max-width: 92vw !important;
-            width: 1250px;
-        }
-        .modal-dialog-resizable {
-            resize: both;
-            overflow: hidden;
-            min-width: 600px;
+        /* 彈窗滑桿控制群組與動態樣式 */
+        .modal-custom-dialog {
+            max-width: 96vw !important;
+            width: var(--modal-dialog-width);
+            transition: width 0.1s ease;
         }
         .dynamic-field-label {
             font-size: calc(var(--modal-font-size) - 1.5px);
@@ -257,10 +254,16 @@
             border-color: #2563eb;
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
-        .font-adjust-btn {
-            font-size: 12px;
-            padding: 2px 7px;
-            line-height: 1.2;
+        .slide-control-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #e2e8f0;
+        }
+        .slide-control-item input[type="range"] {
+            width: 85px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -275,6 +278,10 @@
         <div class="d-flex gap-2 align-items-center">
             <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
             
+            <button class="btn btn-outline-secondary btn-sm px-2" onclick="resetColumnWidths()" title="將所有欄位寬度重置為預設">
+                <i class="fa-solid fa-arrows-rotate me-1"></i> 重設欄寬
+            </button>
+
             <button class="btn btn-outline-primary btn-sm fw-bold px-2" onclick="forceReloadData()">
                 <i class="fa-solid fa-rotate me-1"></i> 強制重新整理
             </button>
@@ -343,7 +350,7 @@
             </div>
 
             <div class="d-flex align-items-center gap-2">
-                <span class="text-muted small"><i class="fa-solid fa-arrows-left-right me-1"></i>表頭邊界可滑鼠拖曳欄寬</span>
+                <span class="text-muted small"><i class="fa-solid fa-arrows-left-right me-1"></i>表頭邊界拖曳自動記憶欄寬</span>
                 <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 220px;" placeholder="🔍 快速搜尋...">
             </div>
         </div>
@@ -357,32 +364,41 @@
     </div>
 </div>
 
-<!-- 新增/編輯 Modal (超大字體、支援即時縮放與下拉建議) -->
+<!-- 新增/編輯 Modal (具備字體與寬度 Slide Bar 調節器) -->
 <div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-custom-size modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-custom-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content shadow-lg border-0">
-            <div class="modal-header bg-dark text-white py-2 px-3 d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center gap-3">
-                    <h5 class="modal-title fw-bold mb-0" id="modalTitle" style="font-size: 16px;">
+            <div class="modal-header bg-dark text-white py-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <h5 class="modal-title fw-bold mb-0" id="modalTitle" style="font-size: 15px;">
                         <i class="fa-solid fa-pen-to-square me-2 text-info"></i>登記資料
                     </h5>
-                    <!-- 彈窗字體縮放切換器 -->
-                    <div class="btn-group btn-group-sm" role="group" title="調整表單字體大小">
-                        <button type="button" class="btn btn-outline-light font-adjust-btn" onclick="adjustModalFontSize(-1.5)">A -</button>
-                        <button type="button" class="btn btn-outline-light font-adjust-btn" onclick="adjustModalFontSize(1.5)">A +</button>
+                </div>
+
+                <!-- 彈窗字體與寬度 Slide Bar -->
+                <div class="d-flex align-items-center gap-3 bg-secondary bg-opacity-25 px-2 py-1 rounded">
+                    <div class="slide-control-item" title="左右滑動調整輸入字體大小">
+                        <span><i class="fa-solid fa-font me-1"></i>字體:</span>
+                        <input type="range" id="fontSlider" min="12" max="24" step="0.5" value="14.5" oninput="onFontSizeSliderChange(this.value)">
+                        <span id="fontSliderVal" style="width: 28px;">14.5</span>
+                    </div>
+
+                    <div class="slide-control-item" title="左右滑動調整視窗寬度">
+                        <span><i class="fa-solid fa-arrows-left-right me-1"></i>寬度:</span>
+                        <input type="range" id="widthSlider" min="700" max="1700" step="20" value="1200" oninput="onWidthSliderChange(this.value)">
+                        <span id="widthSliderVal" style="width: 38px;">1200</span>
                     </div>
                 </div>
+
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
+
             <div class="modal-body p-3 bg-light">
                 <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
                     <input type="hidden" id="formAction" value="add">
                     <input type="hidden" id="editingRowIndex" value="">
                     
-                    <!-- 動態表單欄位 -->
                     <div class="row g-3" id="dynamicFormFields"></div>
-
-                    <!-- 共用下拉提示資料庫 (Datalist container) -->
                     <div id="datalistContainer"></div>
 
                     <div class="text-end mt-4 pt-2 border-top">
@@ -404,58 +420,105 @@
 
     const sheetColumnMap = {
         "Open PO (TW)": [
-            { title: "Date", idx: 0 },
-            { title: "PO #", idx: 1 },
-            { title: "Supplier", idx: 2 },
-            { title: "Customer", idx: 3 },
-            { title: "Customer PO#", idx: 4 },
-            { title: "OC#", idx: 5 },
-            { title: "Cus. Region", idx: 6 },
-            { title: "Description", idx: 7 },
-            { title: "QTY", idx: 8 },
-            { title: "ETA", idx: 9 },
-            { title: "Status", idx: 10 },
-            { title: "Inco-terms", idx: 11 },
-            { title: "Currency", idx: 12 },
-            { title: "Unit Price", idx: 13 },
-            { title: "Amount", idx: 14 },
-            { title: "Created by", idx: 15 },
-            { title: "Remark", idx: 16 },
-            { title: "Goods Received Date", idx: 17 },
-            { title: "Inv Date", idx: 18 },
-            { title: "Supplier Inv", idx: 19 },
-            { title: "Payment Terms", idx: 20 },
-            { title: "Received Cus Exchg Parts", idx: 21 }
+            { title: "Date", idx: 0, defaultW: 100 },
+            { title: "PO #", idx: 1, defaultW: 130 },
+            { title: "Supplier", idx: 2, defaultW: 150 },
+            { title: "Customer", idx: 3, defaultW: 140 },
+            { title: "Customer PO#", idx: 4, defaultW: 140 },
+            { title: "OC#", idx: 5, defaultW: 130 },
+            { title: "Cus. Region", idx: 6, defaultW: 90 },
+            { title: "Description", idx: 7, defaultW: 260 },
+            { title: "QTY", idx: 8, defaultW: 70 },
+            { title: "ETA", idx: 9, defaultW: 100 },
+            { title: "Status", idx: 10, defaultW: 110 },
+            { title: "Inco-terms", idx: 11, defaultW: 100 },
+            { title: "Currency", idx: 12, defaultW: 80 },
+            { title: "Unit Price", idx: 13, defaultW: 90 },
+            { title: "Amount", idx: 14, defaultW: 100 },
+            { title: "Created by", idx: 15, defaultW: 110 },
+            { title: "Remark", idx: 16, defaultW: 160 },
+            { title: "Goods Received Date", idx: 17, defaultW: 120 },
+            { title: "Inv Date", idx: 18, defaultW: 100 },
+            { title: "Supplier Inv", idx: 19, defaultW: 120 },
+            { title: "Payment Terms", idx: 20, defaultW: 110 },
+            { title: "Received Cus Exchg Parts", idx: 21, defaultW: 160 }
         ],
         "Open OC (TW)": [
-            { title: "Date", idx: 0 },           // A 欄
-            { title: "OC#", idx: 1 },            // B 欄
-            { title: "Customer", idx: 2 },       // C 欄
-            { title: "Customer PO#", idx: 3 },   // D 欄
-            { title: "Cus. Region", idx: 4 },    // E 欄
-            { title: "Tax Invoice", idx: 5 },    // F 欄
-            { title: "GUI Receipt", idx: 6 },    // G 欄
-            { title: "Description", idx: 7 },    // H 欄
-            { title: "QTY", idx: 8 },            // I 欄
-            { title: "Status", idx: 9 },         // J 欄
-            { title: "Currency", idx: 10 },      // K 欄
-            { title: "Selling Price", idx: 11 }, // L 欄
-            { title: "VAT", idx: 12 },           // M 欄
-            { title: "Total Amount", idx: 13 },  // N 欄
-            { title: "PAID", idx: 14 },          // O 欄
-            { title: "Remark", idx: 15 }         // P 欄
+            { title: "Date", idx: 0, defaultW: 100 },           // A 欄
+            { title: "OC#", idx: 1, defaultW: 140 },            // B 欄
+            { title: "Customer", idx: 2, defaultW: 140 },       // C 欄
+            { title: "Customer PO#", idx: 3, defaultW: 140 },   // D 欄
+            { title: "Cus. Region", idx: 4, defaultW: 90 },    // E 欄
+            { title: "Tax Invoice", idx: 5, defaultW: 130 },   // F 欄
+            { title: "GUI Receipt", idx: 6, defaultW: 130 },   // G 欄
+            { title: "Description", idx: 7, defaultW: 260 },   // H 欄
+            { title: "QTY", idx: 8, defaultW: 70 },            // I 欄
+            { title: "Status", idx: 9, defaultW: 110 },         // J 欄
+            { title: "Currency", idx: 10, defaultW: 80 },      // K 欄
+            { title: "Selling Price", idx: 11, defaultW: 100 }, // L 欄
+            { title: "VAT", idx: 12, defaultW: 90 },           // M 欄
+            { title: "Total Amount", idx: 13, defaultW: 110 },  // N 欄
+            { title: "PAID", idx: 14, defaultW: 80 },          // O 欄
+            { title: "Remark", idx: 15, defaultW: 160 }         // P 欄
         ]
     };
 
     let currentSheetName = 'Open OC (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
-    let currentModalFontSize = 14.5; // 彈窗字體基準 (px)
 
-    // 彈窗字體縮放
-    function adjustModalFontSize(delta) {
-        currentModalFontSize = Math.max(12, Math.min(22, currentModalFontSize + delta));
-        document.documentElement.style.setProperty('--modal-font-size', currentModalFontSize + 'px');
+    // 讀取並初始化持久化設定
+    function loadSavedSettings() {
+        const savedFontSize = localStorage.getItem('ptw_modal_font_size') || '14.5';
+        const savedWidth = localStorage.getItem('ptw_modal_width') || '1200';
+
+        document.documentElement.style.setProperty('--modal-font-size', savedFontSize + 'px');
+        document.documentElement.style.setProperty('--modal-dialog-width', savedWidth + 'px');
+
+        const fs = document.getElementById('fontSlider');
+        const fsv = document.getElementById('fontSliderVal');
+        const ws = document.getElementById('widthSlider');
+        const wsv = document.getElementById('widthSliderVal');
+        if (fs) fs.value = savedFontSize;
+        if (fsv) fsv.innerText = savedFontSize;
+        if (ws) ws.value = savedWidth;
+        if (wsv) wsv.innerText = savedWidth;
+    }
+
+    // 滑桿響應：字體大小
+    function onFontSizeSliderChange(val) {
+        document.documentElement.style.setProperty('--modal-font-size', val + 'px');
+        document.getElementById('fontSliderVal').innerText = val;
+        localStorage.setItem('ptw_modal_font_size', val);
+    }
+
+    // 滑桿響應：彈窗寬度
+    function onWidthSliderChange(val) {
+        document.documentElement.style.setProperty('--modal-dialog-width', val + 'px');
+        document.getElementById('widthSliderVal').innerText = val;
+        localStorage.setItem('ptw_modal_width', val);
+    }
+
+    // 欄寬持久化儲存與讀取
+    function getStoredColWidth(sheetName, colTitle, fallback) {
+        const storageKey = `ptw_colwidth_${sheetName}_${colTitle}`;
+        const saved = localStorage.getItem(storageKey);
+        return saved ? parseInt(saved, 10) : fallback;
+    }
+
+    function saveColWidth(sheetName, colTitle, width) {
+        const storageKey = `ptw_colwidth_${sheetName}_${colTitle}`;
+        localStorage.setItem(storageKey, width);
+    }
+
+    function resetColumnWidths() {
+        if (!confirm(`確定要重設「${currentSheetName}」的所有欄位寬度為預設值？`)) return;
+        const cols = sheetColumnMap[currentSheetName] || [];
+        cols.forEach(c => {
+            localStorage.removeItem(`ptw_colwidth_${currentSheetName}_${c.title}`);
+        });
+        renderHeader();
+        renderRows(globalData);
     }
 
     function formatDateDisplay(val) {
@@ -498,7 +561,6 @@
         return val;
     }
 
-    // 雙模相容抓取
     function getCellVal(row, colIdx) {
         if (!row) return '';
         if (Array.isArray(row.cells)) {
@@ -514,12 +576,12 @@
     }
 
     function initApp() {
+        loadSavedSettings();
         renderHeader();
         fetchLatestData();
     }
 
     function forceReloadData() {
-        localStorage.clear();
         globalData = [];
         renderRows([]);
         fetchLatestData();
@@ -530,7 +592,8 @@
         document.querySelectorAll('.sheet-tabs .nav-link').forEach(btn => btn.classList.remove('active'));
         if (sheetName === 'Open PO (TW)') document.getElementById('tab-po').classList.add('active');
         if (sheetName === 'Open OC (TW)') document.getElementById('tab-oc').classList.add('active');
-        initApp();
+        renderHeader();
+        fetchLatestData();
     }
 
     async function fetchLatestData() {
@@ -595,11 +658,17 @@
         cols.forEach((c) => {
             const th = document.createElement('th');
             th.textContent = c.title;
+
+            // 讀取記住的寬度
+            const w = getStoredColWidth(currentSheetName, c.title, c.defaultW);
+            th.style.width = w + 'px';
+            th.style.minWidth = w + 'px';
+
             if (c.title.toLowerCase().includes('date')) th.classList.add('col-date');
             
             const resizer = document.createElement('div');
             resizer.classList.add('col-resizer');
-            resizer.addEventListener('mousedown', (e) => initColResize(e, th));
+            resizer.addEventListener('mousedown', (e) => initColResize(e, th, c.title));
             th.appendChild(resizer);
             headerTr.appendChild(th);
         });
@@ -610,23 +679,27 @@
         headerTr.appendChild(actionTh);
     }
 
-    function initColResize(e, th) {
+    // 拖曳調整欄寬並永久寫入 LocalStorage
+    function initColResize(e, th, colTitle) {
         e.stopPropagation();
         const startX = e.pageX;
         const startWidth = th.offsetWidth;
         const resizer = e.target;
         resizer.classList.add('resizing');
+        let finalWidth = startWidth;
 
         function onMouseMove(ev) {
-            const newWidth = Math.max(50, startWidth + (ev.pageX - startX));
-            th.style.width = newWidth + 'px';
-            th.style.minWidth = newWidth + 'px';
+            finalWidth = Math.max(50, startWidth + (ev.pageX - startX));
+            th.style.width = finalWidth + 'px';
+            th.style.minWidth = finalWidth + 'px';
         }
 
         function onMouseUp() {
             resizer.classList.remove('resizing');
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
+            // 永久記憶該欄寬
+            saveColWidth(currentSheetName, colTitle, finalWidth);
         }
 
         window.addEventListener('mousemove', onMouseMove);
@@ -742,14 +815,12 @@
         XLSX.writeFile(workbook, `${currentSheetName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
-    // 智能提取歷史欄位內容，建立自動下拉清單
     function buildDataLists() {
         const datalistContainer = document.getElementById('datalistContainer');
         datalistContainer.innerHTML = '';
         const cols = sheetColumnMap[currentSheetName] || [];
 
         cols.forEach(c => {
-            // 日期與金額等數值欄位不重複提示
             const skipCols = ['Date', 'ETA', 'Goods Received Date', 'Inv Date', 'QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'];
             if (skipCols.includes(c.title)) return;
 
@@ -761,7 +832,6 @@
                 }
             });
 
-            // 為 Status 與 Currency 提供標準常用預設值
             if (c.title === 'Status') {
                 ['Open', 'Completed', 'Cancelled', 'PO Sent', 'Partial Received', 'Partial Completed'].forEach(s => uniqueValues.add(s));
             }
@@ -800,7 +870,6 @@
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
-    // 建構彈出視窗欄位與綁定下拉式選單 (Datalist)
     function buildDynamicForm(data) {
         buildDataLists();
         const container = document.getElementById('dynamicFormFields');
@@ -809,8 +878,6 @@
 
         cols.forEach(c => {
             const colDiv = document.createElement('div');
-            
-            // Description 與 Remark 欄位寬度佔滿 12 格，其他標準欄位各佔 6 格
             if (['Description', 'Remark'].includes(c.title)) {
                 colDiv.className = 'col-md-12';
             } else {
@@ -823,14 +890,13 @@
                 val = formatDateDisplay(val);
             }
 
-            // 是否有對應的自動補完下拉清單
             const hasDatalist = document.getElementById(`datalist_col_${c.idx}`);
             const listAttr = hasDatalist ? `list="datalist_col_${c.idx}"` : '';
 
             colDiv.innerHTML = `
                 <label class="dynamic-field-label">
                     <span>${c.title}</span>
-                    ${hasDatalist ? '<small class="text-primary fw-normal" style="font-size: 11px;"><i class="fa-solid fa-chevron-down me-1"></i>支援快速打字/下拉</small>' : ''}
+                    ${hasDatalist ? '<small class="text-primary fw-normal" style="font-size: 11px;"><i class="fa-solid fa-chevron-down me-1"></i>支援快速下拉</small>' : ''}
                 </label>
                 <input type="${isDateCol ? 'date' : 'text'}" 
                        class="form-control dynamic-field-input" 
