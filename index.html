@@ -52,7 +52,6 @@
             gap: 8px;
         }
 
-        /* Dashboard 卡片 */
         .stat-card-btn {
             background: #ffffff;
             border-radius: 6px;
@@ -85,7 +84,6 @@
             margin-top: 2px;
         }
 
-        /* 頁籤 */
         .sheet-tabs .nav-link {
             font-weight: 600;
             font-size: 13px;
@@ -103,7 +101,6 @@
             border-top: 3px solid #2563eb;
         }
 
-        /* 表格容器 */
         .table-panel {
             background: #ffffff;
             border-radius: 0 0 6px 6px;
@@ -378,7 +375,7 @@
     <option value="TSMC 2 BSEM 4">
     <option value="TSMC DEC.">
     <option value="UMC 8C">
-    <option value="UMC 8D">
+    <option銅 value="UMC 8D">
     <option value="UMC 8E">
     <option value="UMC 8F">
     <option value="UMC 8F 8P">
@@ -447,16 +444,16 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 統一雙向支援 PO / PO# 與 Customer PO / Customer PO#
+    // 與 Excel 原始檔完全相同的標準表頭定義
     const sheetSchemas = {
         "Open PO (TW)": [
-            "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
+            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
             "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
             "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
             "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
         ],
         "Open OC (TW)": [
-            "Date", "OC", "Customer", "Customer PO", "Cus. Region", "Tax Invoice", 
+            "Date", "OC#", "Customer", "Customer PO#", "Cus. Region", "Tax Invoice", 
             "GUI Receipt", "Description", "QTY", "Status", "Currency", "Selling Price", 
             "VAT", "Total Amount", "PAID", "Remark"
         ]
@@ -506,16 +503,16 @@
         return val;
     }
 
-    // 欄位容錯讀取（徹底解決 Customer PO vs Customer PO# 抓不到值問題）
+    // 全方位欄位模糊匹配：徹底解決 PO / PO#、Customer PO / Customer PO# 取不到值的問題
     function getRowVal(row, col) {
         if (!row) return '';
         if (row[col] !== undefined && row[col] !== '') return row[col];
-        if (row[col + '#'] !== undefined && row[col + '#'] !== '') return row[col + '#'];
-        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined) return row[col.slice(0, -1)];
+        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined && row[col.slice(0, -1)] !== '') return row[col.slice(0, -1)];
+        if (!col.endsWith('#') && row[col + '#'] !== undefined && row[col + '#'] !== '') return row[col + '#'];
 
         const cleanCol = col.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         for (let k in row) {
-            if (k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanCol) {
+            if (k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanCol && row[k] !== undefined && row[k] !== '') {
                 return row[k];
             }
         }
@@ -602,7 +599,7 @@
 
         globalData.forEach(row => {
             const status = String(getRowVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getRowVal(row, "OC") || "").trim();
+            const ocVal = String(getRowVal(row, "OC#") || "").trim();
             const amt = parseFloat(getRowVal(row, "Amount") || getRowVal(row, "Total Amount") || getRowVal(row, "Selling Price")) || 0;
 
             if (ocVal !== "") ocCount++;
@@ -625,8 +622,7 @@
 
         currentCols.forEach((col) => {
             const th = document.createElement('th');
-            // 表頭顯示標籤（若是 PO 則顯示 PO #）
-            th.textContent = (col === 'PO' || col === 'OC' || col === 'Customer PO') ? col + '#' : col;
+            th.textContent = col;
             if (col.toLowerCase().includes('date')) {
                 th.classList.add('col-date');
             }
@@ -668,7 +664,6 @@
         window.addEventListener('mouseup', onMouseUp);
     }
 
-    // 渲染表格內容：真實呈現 Excel 原本的狀態值（取消強制替換成 Confirmed）
     function renderRows(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
@@ -692,7 +687,6 @@
                     val = formatDateDisplay(val);
                 }
 
-                // 忠實顯示 Excel 中的真實狀態，並賦予對應顏色標籤
                 if (col === 'Status') {
                     if (statusLower === 'completed') {
                         val = `<span class="badge-status badge-completed"><i class="fa-solid fa-check"></i> Completed</span>`;
@@ -750,7 +744,7 @@
 
         const filtered = globalData.filter(row => {
             const rawStatus = String(getRowVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getRowVal(row, "OC") || "").trim();
+            const ocVal = String(getRowVal(row, "OC#") || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -765,6 +759,7 @@
         renderRows(filtered);
     }
 
+    // 精確匯入：徹底解決雙向欄位比對問題
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -779,10 +774,10 @@
                 syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
 
                 for (const sheetName of workbook.SheetNames) {
-                    const sLower = sheetName.toLowerCase();
+                    const sLower = sheetName.toLowerCase().trim();
                     let targetSheet = null;
-                    if (sLower.includes("po")) targetSheet = "Open PO (TW)";
-                    else if (sLower.includes("oc")) targetSheet = "Open OC (TW)";
+                    if (sLower === "open po (tw)" || sLower.includes("po")) targetSheet = "Open PO (TW)";
+                    else if (sLower === "open oc (tw)" || sLower.includes("oc")) targetSheet = "Open OC (TW)";
                     else continue;
 
                     const worksheet = workbook.Sheets[sheetName];
@@ -799,7 +794,10 @@
                                 } else if (typeof v === 'number' && col.toLowerCase().includes('date')) {
                                     v = formatDateDisplay(v);
                                 }
+                                // 同時寫入 PO 與 PO#、OC 與 OC#，確保後端試算表無論哪種名稱都能完全對齊
                                 item[col] = v;
+                                if (col.endsWith('#')) item[col.slice(0, -1)] = v;
+                                else item[col + '#'] = v;
                             });
                             return item;
                         });
@@ -867,11 +865,12 @@
                 val = formatDateDisplay(val);
             }
 
-            const dl = document.getElementById(`dl_${col}`);
-            const listAttr = dl ? `list="dl_${col}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
+            const cleanField = col.replace(/[^a-zA-Z0-9]/g, '');
+            const dl = document.getElementById(`dl_${col}`) || document.getElementById(`dl_${cleanField}`);
+            const listAttr = dl ? `list="${dl.id}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
             colDiv.innerHTML = `
-                <label class="form-label small fw-bold mb-1">${(col === 'PO' || col === 'OC' || col === 'Customer PO') ? col + '#' : col}</label>
+                <label class="form-label small fw-bold mb-1">${col}</label>
                 <input type="${col.toLowerCase().includes('date') ? 'date' : 'text'}" 
                        class="form-control form-control-sm" 
                        id="input_${col}" 
@@ -897,7 +896,10 @@
         const cols = sheetSchemas[currentSheetName] || [];
         cols.forEach(col => {
             const el = document.getElementById(`input_${col}`);
-            payload[col] = el ? el.value : "";
+            const val = el ? el.value : "";
+            payload[col] = val;
+            if (col.endsWith('#')) payload[col.slice(0, -1)] = val;
+            else payload[col + '#'] = val;
         });
 
         try {
