@@ -7,7 +7,7 @@
     <!-- Bootstrap 5 CSS & FontAwesome Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <!-- SheetJS 處理 Excel 匯入匯出 -->
+    <!-- SheetJS -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
@@ -27,13 +27,14 @@
             color: #334155;
         }
 
+        /* 視窗滿版容器 */
         .app-wrapper {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            padding: 8px 14px;
+            padding: 10px 14px;
             box-sizing: border-box;
-            gap: 6px;
+            gap: 8px;
         }
 
         .app-header {
@@ -103,7 +104,7 @@
             border-top: 3px solid #2563eb;
         }
 
-        /* 表格面板 */
+        /* 表格容器：彈性撐滿畫面剩餘高度 */
         .table-panel {
             background: #ffffff;
             border-radius: 0 0 6px 6px;
@@ -117,7 +118,7 @@
         }
 
         .filter-toolbar {
-            padding: 6px 10px;
+            padding: 8px 12px;
             border-bottom: 1px solid #e2e8f0;
             background: #fafafa;
             flex-shrink: 0;
@@ -155,13 +156,13 @@
             position: relative;
         }
 
-        /* 欄寬調整手把 */
+        /* 欄寬調整手把 (Resizer) */
         .col-resizer {
             position: absolute;
             right: 0;
             top: 0;
             bottom: 0;
-            width: 7px;
+            width: 6px;
             cursor: col-resize;
             user-select: none;
             background-color: transparent;
@@ -182,9 +183,10 @@
             white-space: pre-line;
         }
 
+        /* 第一欄 (Date) 寬度控制與可調性 */
         .col-date {
             min-width: 95px;
-            width: 105px;
+            width: 100px;
             text-align: center;
         }
 
@@ -264,21 +266,21 @@
         </div>
     </div>
 
-    <!-- 儀表板卡片 (含年度 PO 收度統計) -->
+    <!-- 儀表板卡片 -->
     <div class="row g-2 flex-shrink-0">
-        <div class="col-md-2">
+        <div class="col-md-3">
             <button class="stat-card-btn active" id="btnDashALL" onclick="filterByStatus('ALL', this)">
-                <div class="stat-title"><i class="fa-solid fa-list-check me-1"></i> 顯示總筆數</div>
+                <div class="stat-title"><i class="fa-solid fa-list-check me-1"></i> 總筆數 (Total Items)</div>
                 <div class="stat-value text-dark" id="statTotal">0</div>
             </button>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <button class="stat-card-btn" id="btnDashOPEN" style="border-left: 4px solid #f59e0b;" onclick="filterByStatus('OPEN', this)">
-                <div class="stat-title"><i class="fa-solid fa-clock me-1 text-warning"></i> Open 未結案筆數</div>
+                <div class="stat-title"><i class="fa-solid fa-clock me-1 text-warning"></i> Open 未結案</div>
                 <div class="stat-value text-warning" id="statOpen">0</div>
             </button>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <button class="stat-card-btn" id="btnDashCONFIRMED" style="border-left: 4px solid #0284c7;" onclick="filterByStatus('CONFIRMED', this)">
                 <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC</div>
                 <div class="stat-value text-info" id="statConfirmed">0</div>
@@ -286,17 +288,8 @@
         </div>
         <div class="col-md-3">
             <div class="stat-card-btn" style="border-left: 4px solid #10b981; cursor: default;">
-                <div class="stat-title"><i class="fa-solid fa-hand-holding-dollar me-1 text-success"></i> 年度 PO 總額 (USD)</div>
-                <div class="stat-value text-success" id="statTotalAmount">$0</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card-btn" style="border-left: 4px solid #8b5cf6; cursor: default;">
-                <div class="stat-title d-flex justify-content-between">
-                    <span><i class="fa-solid fa-chart-line me-1 text-primary"></i> PO 結案收度 (達成率)</span>
-                    <span id="statReceiptRate" class="badge bg-primary text-white">0%</span>
-                </div>
-                <div class="stat-value text-primary" id="statCompletedAmount">$0</div>
+                <div class="stat-title"><i class="fa-solid fa-dollar-sign me-1 text-success"></i> Open 未結案金額 (USD)</div>
+                <div class="stat-value text-success" id="statOpenAmount">$0</div>
             </div>
         </div>
     </div>
@@ -326,31 +319,9 @@
                 <button type="button" class="btn btn-outline-danger" id="btnFilterCANCELLED" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
             </div>
 
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small">年度:</span>
-                    <select id="yearFilter" class="form-select form-select-sm" style="width: 100px;" onchange="applyFilters()">
-                        <option value="ALL" selected>全部年度</option>
-                        <option value="2026">2026</option>
-                        <option value="2025">2025</option>
-                    </select>
-                </div>
-
-                <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small">客戶:</span>
-                    <select id="customerFilter" class="form-select form-select-sm" style="width: 125px;" onchange="applyFilters()">
-                        <option value="ALL">全部客戶</option>
-                    </select>
-                </div>
-
-                <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small">供應商:</span>
-                    <select id="supplierFilter" class="form-select form-select-sm" style="width: 125px;" onchange="applyFilters()">
-                        <option value="ALL">全部供應商</option>
-                    </select>
-                </div>
-
-                <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 160px;" placeholder="🔍 快速搜尋...">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted small"><i class="fa-solid fa-arrows-left-right me-1"></i>表頭邊界可滑鼠拖曳欄寬</span>
+                <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 220px;" placeholder="🔍 快速搜尋...">
             </div>
         </div>
 
@@ -363,8 +334,33 @@
     </div>
 </div>
 
-<!-- 預置選單 DataLists -->
-<datalist id="list_Supplier">
+<!-- 新增/編輯 Modal -->
+<div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title fw-bold" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記資料</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
+                    <input type="hidden" id="formAction" value="add">
+                    <input type="hidden" id="editingRowIndex" value="">
+                    <div class="row g-2" id="dynamicFormFields">
+                        <!-- 動態依據當前工作表欄位生成輸入項 -->
+                    </div>
+                    <div class="text-end mt-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold" id="submitBtn">儲存寫入</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 預置常用項目 DataLists (可隨打字自動過濾，亦可手動輸入新值) -->
+<datalist id="dl_Supplier">
     <option value="Jesse Technology Pte Ltd">
     <option value="Hootec Electronics Co., Ltd">
     <option value="WUXI ZHUOHAI TECHNOLOGY CO.,LTD">
@@ -373,9 +369,11 @@
     <option value="Cyun Chen Technology Co., Ltd">
     <option value="ANTS應用奈米科技股份有限公司">
     <option value="TSMC">
+    <option value="PTW SpinTec GmbH">
+    <option value="Cin Tai">
 </datalist>
 
-<datalist id="list_Customer">
+<datalist id="dl_Customer">
     <option value="TSMC 3">
     <option value="TSMC 5">
     <option value="TSMC 8">
@@ -394,23 +392,7 @@
     <option value="Mosel">
 </datalist>
 
-<datalist id="list_Currency">
-    <option value="USD">
-    <option value="TWD">
-    <option value="EUR">
-    <option value="JPY">
-</datalist>
-
-<datalist id="list_Inco_terms">
-    <option value="EXW">
-    <option value="EXW Korea">
-    <option value="FOB">
-    <option value="CIF">
-    <option value="DDP">
-    <option value="NA">
-</datalist>
-
-<datalist id="list_Status">
+<datalist id="dl_Status">
     <option value="Open">
     <option value="PO Sent">
     <option value="Completed">
@@ -419,28 +401,32 @@
     <option value="Pending Payment">
 </datalist>
 
-<!-- 新增/編輯 Modal -->
-<div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header bg-dark text-white py-2">
-                <h6 class="modal-title fw-bold" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記資料</h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
-                    <input type="hidden" id="formAction" value="add">
-                    <input type="hidden" id="editingRowIndex" value="">
-                    <div class="row g-2" id="dynamicFormFields"></div>
-                    <div class="text-end mt-3">
-                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
-                        <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold" id="submitBtn">儲存寫入</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<datalist id="dl_Currency">
+    <option value="USD">
+    <option value="TWD">
+    <option value="EUR">
+    <option value="JPY">
+</datalist>
+
+<datalist id="dl_Inco-terms">
+    <option value="EXW">
+    <option value="EXW Korea">
+    <option value="FOB">
+    <option value="CIF">
+    <option value="DDP">
+    <option value="NA">
+</datalist>
+
+<datalist id="dl_Cus. Region">
+    <option value="TW">
+    <option value="US">
+</datalist>
+
+<datalist id="dl_Created by">
+    <option value="Candice">
+    <option value="Ivy">
+    <option value="Joanne">
+</datalist>
 
 <!-- 清空確認 Modal -->
 <div class="modal fade" id="clearConfirmModal" tabindex="-1" aria-hidden="true">
@@ -466,6 +452,7 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
+    // 依據 Excel 實際欄位定義
     const sheetSchemas = {
         "Open PO (TW)": [
             "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
@@ -484,11 +471,10 @@
     let globalData = [];
     let activeFilter = 'ALL';
 
-    // 解決日期差一天問題的核心轉換函式 (使用 UTC 避免時區扣除一天)
+    // 格式化日期（支援 Excel 序列天數，使用 UTC 運算避免 GMT+8 時差少一天）
     function formatDateDisplay(val) {
         if (val === undefined || val === null || val === '') return '';
-
-        // 1. 純數字處理 (Excel 序列天數)
+        
         if (typeof val === 'number' && val > 20000 && val < 70000) {
             const excelEpochUTC = Date.UTC(1899, 11, 30);
             const d = new Date(excelEpochUTC + Math.round(val) * 86400000);
@@ -498,7 +484,6 @@
             return `${y}-${m}-${day}`;
         }
 
-        // 2. Date 物件 (直接取 Local 年月日)
         if (val instanceof Date && !isNaN(val)) {
             const y = val.getFullYear();
             const m = String(val.getMonth() + 1).padStart(2, '0');
@@ -506,7 +491,6 @@
             return `${y}-${m}-${day}`;
         }
 
-        // 3. 字串格式
         if (typeof val === 'string') {
             const trimmed = val.trim();
             if (/^\d{5}$/.test(trimmed)) {
@@ -522,11 +506,7 @@
                 return trimmed.split('T')[0];
             }
             if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(trimmed)) {
-                const parts = trimmed.split(/[\/\-\.]/);
-                const y = parts[0];
-                const m = parts[1].padStart(2, '0');
-                const day = parts[2].split(' ')[0].padStart(2, '0');
-                return `${y}-${m}-${day}`;
+                return trimmed.replace(/\//g, '-').split(' ')[0];
             }
         }
         return val;
@@ -538,8 +518,9 @@
         if (cached) {
             try {
                 globalData = JSON.parse(cached);
-                populateFilterOptions();
-                applyFilters();
+                updateDropdownsFromDatabase();
+                updateDashboard();
+                renderRows(globalData);
             } catch (e) {}
         }
         fetchLatestData();
@@ -559,97 +540,70 @@
 
         try {
             const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}`, { method: 'GET', redirect: 'follow' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
             if (Array.isArray(data)) {
                 globalData = data;
                 localStorage.setItem(`oc_cache_${currentSheetName}`, JSON.stringify(data));
-                populateFilterOptions();
+                updateDropdownsFromDatabase();
+                updateDashboard();
                 applyFilters();
                 syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步`;
-            } else {
-                throw new Error(data.message || "回傳格式非陣列");
             }
         } catch (err) {
-            console.error("GAS 連線失敗:", err);
-            syncStatus.innerHTML = `<span class="text-danger" title="${err.message}"><i class="fa-solid fa-circle-exclamation"></i> 同步失敗</span>`;
-            if (globalData.length === 0) {
-                renderRows([]);
-            }
+            console.error(err);
+            syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-exclamation"></i> 同步失敗</span>`;
         }
     }
 
-    function populateFilterOptions() {
-        const cusSet = new Set();
-        const supSet = new Set();
+    // 從資料庫 (globalData) 自動搜集過去的紀錄，動態補齊下拉選單項目
+    function updateDropdownsFromDatabase() {
+        if (!Array.isArray(globalData) || globalData.length === 0) return;
 
-        globalData.forEach(row => {
-            const cus = String(row['Customer'] || '').trim();
-            const sup = String(row['Supplier'] || '').trim();
-            if (cus) cusSet.add(cus);
-            if (sup) supSet.add(sup);
-        });
+        const targetFields = ['Supplier', 'Customer', 'Status', 'Currency', 'Inco-terms', 'Cus. Region', 'Created by'];
 
-        const cusSelect = document.getElementById('customerFilter');
-        const currentCusVal = cusSelect.value;
-        cusSelect.innerHTML = '<option value="ALL">全部客戶</option>';
-        Array.from(cusSet).sort().forEach(c => {
-            cusSelect.innerHTML += `<option value="${c}" ${c === currentCusVal ? 'selected' : ''}>${c}</option>`;
-        });
+        targetFields.forEach(field => {
+            const dl = document.getElementById(`dl_${field}`);
+            if (!dl) return;
 
-        const supSelect = document.getElementById('supplierFilter');
-        const currentSupVal = supSelect.value;
-        supSelect.innerHTML = '<option value="ALL">全部供應商</option>';
-        Array.from(supSet).sort().forEach(s => {
-            supSelect.innerHTML += `<option value="${s}" ${s === currentSupVal ? 'selected' : ''}>${s}</option>`;
-        });
+            const existingValues = new Set(Array.from(dl.options).map(opt => opt.value.trim().toLowerCase()));
 
-        const supDatalist = document.getElementById('list_Supplier');
-        supSet.forEach(s => {
-            if (!supDatalist.querySelector(`option[value="${s}"]`)) {
-                supDatalist.innerHTML += `<option value="${s}">`;
-            }
-        });
-
-        const cusDatalist = document.getElementById('list_Customer');
-        cusSet.forEach(c => {
-            if (!cusDatalist.querySelector(`option[value="${c}"]`)) {
-                cusDatalist.innerHTML += `<option value="${c}">`;
-            }
+            globalData.forEach(row => {
+                const val = row[field];
+                if (val && typeof val === 'string') {
+                    const cleanVal = val.trim();
+                    if (cleanVal && !existingValues.has(cleanVal.toLowerCase())) {
+                        existingValues.add(cleanVal.toLowerCase());
+                        const opt = document.createElement('option');
+                        opt.value = cleanVal;
+                        dl.appendChild(opt);
+                    }
+                }
+            });
         });
     }
 
-    function updateDashboard(dataset) {
+    function updateDashboard() {
         let openCount = 0;
         let confirmedCount = 0;
-        let totalAmount = 0;
-        let completedAmount = 0;
+        let openAmount = 0;
 
-        dataset.forEach(row => {
+        globalData.forEach(row => {
             const status = String(row["Status"] || "").trim().toLowerCase();
             const ocVal = String(row["OC#"] || row["OC"] || "").trim();
             const amt = parseFloat(row["Amount"] || row["Total Amount"] || row["Selling Price"]) || 0;
 
-            totalAmount += amt;
-
             if (ocVal !== "") confirmedCount++;
             if (status !== 'completed' && status !== 'cancelled') {
                 openCount++;
-            }
-            if (status === 'completed' || row["Goods Received Date"]) {
-                completedAmount += amt;
+                openAmount += amt;
             }
         });
 
-        const rate = totalAmount > 0 ? ((completedAmount / totalAmount) * 100).toFixed(1) : 0;
-
-        document.getElementById('statTotal').innerText = dataset.length;
+        document.getElementById('statTotal').innerText = globalData.length;
         document.getElementById('statOpen').innerText = openCount;
         document.getElementById('statConfirmed').innerText = confirmedCount;
-        document.getElementById('statTotalAmount').innerText = '$' + totalAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
-        document.getElementById('statCompletedAmount').innerText = '$' + completedAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
-        document.getElementById('statReceiptRate').innerText = `${rate}% 收度`;
+        document.getElementById('statOpenAmount').innerText = '$' + openAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
     }
 
     function renderHeader() {
@@ -657,13 +611,14 @@
         const headerTr = document.getElementById('tableHeader');
         headerTr.innerHTML = '';
 
-        currentCols.forEach((col) => {
+        currentCols.forEach((col, idx) => {
             const th = document.createElement('th');
             th.textContent = col;
             if (col.toLowerCase().includes('date')) {
                 th.classList.add('col-date');
             }
             
+            // 欄寬拖曳把手
             const resizer = document.createElement('div');
             resizer.classList.add('col-resizer');
             resizer.addEventListener('mousedown', (e) => initColResize(e, th));
@@ -678,6 +633,7 @@
         headerTr.appendChild(actionTh);
     }
 
+    // 欄位拖曳調整大小邏輯
     function initColResize(e, th) {
         e.stopPropagation();
         const startX = e.pageX;
@@ -706,11 +662,6 @@
         tbody.innerHTML = '';
         const currentCols = sheetSchemas[currentSheetName] || [];
 
-        if (!data || data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="${currentCols.length + 1}" class="text-center py-4 text-muted"><i class="fa-solid fa-inbox me-2"></i>查無資料 (請確認年度/篩選條件或等待資料同步)</td></tr>`;
-            return;
-        }
-
         data.forEach(row => {
             const tr = document.createElement('tr');
             const rawStatus = String(row["Status"] || "").trim();
@@ -726,6 +677,7 @@
             currentCols.forEach(col => {
                 let val = row[col] !== undefined ? row[col] : (row[col.replace('#', '')] !== undefined ? row[col.replace('#', '')] : '');
 
+                // 修正所有含 Date 欄位的呈現
                 if (col.toLowerCase().includes('date') || col === 'ETA') {
                     val = formatDateDisplay(val);
                 }
@@ -782,16 +734,10 @@
 
     function applyFilters() {
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
-        const selectedYear = document.getElementById('yearFilter').value;
-        const selectedCustomer = document.getElementById('customerFilter').value;
-        const selectedSupplier = document.getElementById('supplierFilter').value;
 
         const filtered = globalData.filter(row => {
             const rawStatus = String(row["Status"] || "").trim().toLowerCase();
             const ocVal = String(row["OC#"] || row["OC"] || "").trim();
-            const rowDate = formatDateDisplay(row["Date"] || "");
-            const rowCus = String(row["Customer"] || "").trim();
-            const rowSup = String(row["Supplier"] || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -799,30 +745,14 @@
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
-            let matchesYear = true;
-            if (selectedYear !== 'ALL') {
-                matchesYear = rowDate.startsWith(selectedYear);
-            }
-
-            let matchesCustomer = true;
-            if (selectedCustomer !== 'ALL') {
-                matchesCustomer = (rowCus === selectedCustomer);
-            }
-
-            let matchesSupplier = true;
-            if (selectedSupplier !== 'ALL') {
-                matchesSupplier = (rowSup === selectedSupplier);
-            }
-
             let matchesKeyword = Object.values(row).some(v => String(v).toLowerCase().includes(keyword));
-
-            return matchesStatus && matchesYear && matchesCustomer && matchesSupplier && matchesKeyword;
+            return matchesStatus && matchesKeyword;
         });
 
-        updateDashboard(filtered);
         renderRows(filtered);
     }
 
+    // 匯入 Excel 支援修復日期
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -831,7 +761,7 @@
         reader.onload = async function(evt) {
             try {
                 const data = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd' });
 
                 const syncStatus = document.getElementById('syncStatus');
                 syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
@@ -846,7 +776,7 @@
                             Object.keys(r).forEach(k => {
                                 let v = r[k];
                                 if (v instanceof Date) {
-                                    v = formatDateDisplay(v);
+                                    v = v.toISOString().split('T')[0];
                                 } else if (typeof v === 'number' && k.toLowerCase().includes('date')) {
                                     v = formatDateDisplay(v);
                                 }
@@ -907,6 +837,7 @@
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
+    // 建立表單輸入項：自動掛載對應欄位的下拉選項 (datalist)
     function buildDynamicForm(data) {
         const container = document.getElementById('dynamicFormFields');
         container.innerHTML = '';
@@ -921,23 +852,17 @@
                 val = formatDateDisplay(val);
             }
 
-            let listAttr = '';
-            if (col === 'Supplier') listAttr = 'list="list_Supplier"';
-            else if (col === 'Customer') listAttr = 'list="list_Customer"';
-            else if (col === 'Currency') listAttr = 'list="list_Currency"';
-            else if (col === 'Inco-terms') listAttr = 'list="list_Inco_terms"';
-            else if (col === 'Status') listAttr = 'list="list_Status"';
-
-            const isDate = col.toLowerCase().includes('date') || col === 'ETA';
+            // 檢查該欄位是否有預置或動態產生的 datalist
+            const dl = document.getElementById(`dl_${col}`);
+            const listAttr = dl ? `list="dl_${col}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
             colDiv.innerHTML = `
                 <label class="form-label small fw-bold mb-1">${col}</label>
-                <input type="${isDate ? 'date' : 'text'}" 
+                <input type="${col.toLowerCase().includes('date') ? 'date' : 'text'}" 
                        class="form-control form-control-sm" 
                        id="input_${col}" 
                        value="${val}" 
-                       ${listAttr}
-                       ${listAttr ? 'placeholder="點擊或輸入選擇..." autocomplete="off"' : ''}>
+                       ${listAttr}>
             `;
             container.appendChild(colDiv);
         });
