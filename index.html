@@ -350,17 +350,49 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    const sheetSchemas = {
+    // 依據 Google Sheet 絕對實體欄位定義（完全不理會標題名稱）
+    const sheetColumnMap = {
         "Open PO (TW)": [
-            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
-            "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
-            "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
-            "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
+            { title: "Date", idx: 0 },
+            { title: "PO #", idx: 1 },
+            { title: "Supplier", idx: 2 },
+            { title: "Customer", idx: 3 },
+            { title: "Customer PO#", idx: 4 },
+            { title: "OC#", idx: 5 },
+            { title: "Cus. Region", idx: 6 },
+            { title: "Description", idx: 7 },
+            { title: "QTY", idx: 8 },
+            { title: "ETA", idx: 9 },
+            { title: "Status", idx: 10 },
+            { title: "Inco-terms", idx: 11 },
+            { title: "Currency", idx: 12 },
+            { title: "Unit Price", idx: 13 },
+            { title: "Amount", idx: 14 },
+            { title: "Created by", idx: 15 },
+            { title: "Remark", idx: 16 },
+            { title: "Goods Received Date", idx: 17 },
+            { title: "Inv Date", idx: 18 },
+            { title: "Supplier Inv", idx: 19 },
+            { title: "Payment Terms", idx: 20 },
+            { title: "Received Cus Exchg Parts", idx: 21 }
         ],
         "Open OC (TW)": [
-            "Date", "OC#", "Customer", "Customer PO#", "Cus. Region", "Tax Invoice", 
-            "GUI Receipt", "Description", "QTY", "Status", "Currency", "Selling Price", 
-            "VAT", "Total Amount", "PAID", "Remark"
+            { title: "Date", idx: 0 },           // A 欄
+            { title: "OC#", idx: 1 },            // B 欄
+            { title: "Customer", idx: 2 },       // C 欄
+            { title: "Customer PO#", idx: 3 },   // D 欄
+            { title: "Cus. Region", idx: 4 },    // E 欄
+            { title: "Tax Invoice", idx: 5 },    // F 欄
+            { title: "GUI Receipt", idx: 6 },    // G 欄
+            { title: "Description", idx: 7 },    // H 欄
+            { title: "QTY", idx: 8 },            // I 欄
+            { title: "Status", idx: 9 },         // J 欄
+            { title: "Currency", idx: 10 },      // K 欄
+            { title: "Selling Price", idx: 11 }, // L 欄
+            { title: "VAT", idx: 12 },           // M 欄
+            { title: "Total Amount", idx: 13 },  // N 欄
+            { title: "PAID", idx: 14 },          // O 欄
+            { title: "Remark", idx: 15 }         // P 欄
         ]
     };
 
@@ -408,44 +440,11 @@
         return val;
     }
 
-    function normalizeKey(str) {
-        return String(str || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
-    }
-
-    function getCellVal(row, colName) {
-        if (!row) return '';
-        
-        if (row[colName] !== undefined && row[colName] !== null && String(row[colName]).trim() !== '') {
-            return row[colName];
-        }
-
-        const aliases = {
-            'PO #': ['PO', 'PO#', 'PO NO', 'PONO'],
-            'Customer PO#': ['Customer PO', 'Customer PO#', 'Cus PO', 'Cus PO#', 'CustomerPO'],
-            'OC#': ['OC', 'OC#', 'OC NO', 'OCNO'],
-            'Cus. Region': ['Cus Region', 'Region', 'CusRegion'],
-            'Inco-terms': ['Incoterms', 'Inco-terms', 'Inco Terms'],
-            'Goods Received Date': ['Goods Received Date', 'GR Date'],
-            'Selling Price': ['Selling Price', 'Price'],
-            'Total Amount': ['Total Amount', 'Total', 'Amount'],
-            'Tax Invoice': ['Tax Invoice', 'TI', 'TaxInvoice'],
-            'GUI Receipt': ['GUI Receipt', 'Receipt', 'GUIReceipt']
-        };
-
-        const targetList = [colName, ...(aliases[colName] || [])];
-        const normalizedTargets = targetList.map(normalizeKey);
-
-        for (let key of Object.keys(row)) {
-            if (key.startsWith('_')) continue;
-            if (normalizedTargets.includes(normalizeKey(key))) {
-                const val = row[key];
-                if (val !== undefined && val !== null && String(val).trim() !== '') {
-                    return val;
-                }
-            }
-        }
-
-        return '';
+    // 核心取值：直接用陣列索引抓取第幾欄
+    function getCellVal(row, colIdx) {
+        if (!row || !row.cells) return '';
+        const val = row.cells[colIdx];
+        return (val !== undefined && val !== null) ? val : '';
     }
 
     function initApp() {
@@ -485,7 +484,7 @@
                 applyFilters();
                 syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步 (${currentSheetName})`;
             } else {
-                syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-exclamation"></i> 格式異常</span>`;
+                syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-exclamation"></i> 讀取格式錯誤</span>`;
             }
         } catch (err) {
             console.error(err);
@@ -498,10 +497,15 @@
         let ocCount = 0;
         let totalAmount = 0;
 
+        const isOC = currentSheetName === 'Open OC (TW)';
+        const statusIdx = isOC ? 9 : 10;
+        const ocIdx = isOC ? 1 : 5;
+        const amtIdx = isOC ? 13 : 14;
+
         globalData.forEach(row => {
-            const status = String(getCellVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getCellVal(row, "OC#") || "").trim();
-            const rawAmt = String(getCellVal(row, "Total Amount") || getCellVal(row, "Amount") || getCellVal(row, "Selling Price") || '0').replace(/,/g, '');
+            const status = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
+            const ocVal = String(getCellVal(row, ocIdx) || "").trim();
+            const rawAmt = String(getCellVal(row, amtIdx) || '0').replace(/,/g, '');
             const amt = parseFloat(rawAmt) || 0;
 
             totalAmount += amt;
@@ -518,22 +522,19 @@
     }
 
     function renderHeader() {
-        const currentCols = sheetSchemas[currentSheetName] || [];
+        const cols = sheetColumnMap[currentSheetName] || [];
         const headerTr = document.getElementById('tableHeader');
         headerTr.innerHTML = '';
 
-        currentCols.forEach((col) => {
+        cols.forEach((c) => {
             const th = document.createElement('th');
-            th.textContent = col;
-            if (col.toLowerCase().includes('date')) {
-                th.classList.add('col-date');
-            }
+            th.textContent = c.title;
+            if (c.title.toLowerCase().includes('date')) th.classList.add('col-date');
             
             const resizer = document.createElement('div');
             resizer.classList.add('col-resizer');
             resizer.addEventListener('mousedown', (e) => initColResize(e, th));
             th.appendChild(resizer);
-
             headerTr.appendChild(th);
         });
 
@@ -569,27 +570,26 @@
     function renderRows(data) {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
-        const currentCols = sheetSchemas[currentSheetName] || [];
+        const cols = sheetColumnMap[currentSheetName] || [];
+        const statusIdx = currentSheetName === 'Open OC (TW)' ? 9 : 10;
 
         data.forEach(row => {
             const tr = document.createElement('tr');
-            const rawStatus = String(getCellVal(row, "Status") || "").trim();
+            const rawStatus = String(getCellVal(row, statusIdx) || "").trim();
             const statusLower = rawStatus.toLowerCase();
             const rowIndex = row["_rowIndex"];
 
-            if (statusLower === 'cancelled') {
-                tr.classList.add('row-cancelled');
-            }
+            if (statusLower === 'cancelled') tr.classList.add('row-cancelled');
 
             let rowHtml = '';
-            currentCols.forEach(col => {
-                let val = getCellVal(row, col);
+            cols.forEach(c => {
+                let val = getCellVal(row, c.idx);
 
-                if (col.toLowerCase().includes('date') || col === 'ETA') {
+                if (c.title.toLowerCase().includes('date') || c.title === 'ETA') {
                     val = formatDateDisplay(val);
                 }
 
-                if (col === 'Status') {
+                if (c.title === 'Status') {
                     if (statusLower === 'completed') {
                         val = `<span class="badge-status badge-completed"><i class="fa-solid fa-check"></i> Completed</span>`;
                     } else if (statusLower === 'cancelled') {
@@ -603,12 +603,12 @@
                     }
                 }
 
-                const isNumeric = ['QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'].includes(col);
+                const isNumeric = ['QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'].includes(c.title);
                 if (isNumeric && typeof val === 'number') {
                     val = val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                 }
 
-                rowHtml += `<td class="${isNumeric ? 'text-right' : ''} ${col.toLowerCase().includes('date') ? 'col-date' : ''}">${val}</td>`;
+                rowHtml += `<td class="${isNumeric ? 'text-right' : ''} ${c.title.toLowerCase().includes('date') ? 'col-date' : ''}">${val}</td>`;
             });
 
             const encodedRow = encodeURIComponent(JSON.stringify(row));
@@ -643,10 +643,13 @@
 
     function applyFilters() {
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
+        const isOC = currentSheetName === 'Open OC (TW)';
+        const statusIdx = isOC ? 9 : 10;
+        const ocIdx = isOC ? 1 : 5;
 
         const filtered = globalData.filter(row => {
-            const rawStatus = String(getCellVal(row, "Status") || "").trim().toLowerCase();
-            const ocVal = String(getCellVal(row, "OC#") || "").trim();
+            const rawStatus = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
+            const ocVal = String(getCellVal(row, ocIdx) || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -654,7 +657,7 @@
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
-            let matchesKeyword = Object.values(row).some(v => String(v).toLowerCase().includes(keyword));
+            let matchesKeyword = (row.cells || []).some(v => String(v).toLowerCase().includes(keyword));
             return matchesStatus && matchesKeyword;
         });
 
@@ -662,15 +665,18 @@
     }
 
     function exportToExcel() {
-        const currentCols = sheetSchemas[currentSheetName] || [];
-        const worksheet = XLSX.utils.json_to_sheet(globalData, { header: currentCols });
+        const cols = sheetColumnMap[currentSheetName] || [];
+        const headers = cols.map(c => c.title);
+        const rows = globalData.map(r => cols.map(c => getCellVal(r, c.idx)));
+        
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, currentSheetName);
         XLSX.writeFile(workbook, `${currentSheetName}_${new Date().toISOString().split('T')[0]}.xlsx`);
     }
 
     function openModalForAdd() {
-        buildDynamicForm({});
+        buildDynamicForm({ cells: [] });
         document.getElementById('formAction').value = "add";
         document.getElementById('editingRowIndex').value = "";
         document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記至 ${currentSheetName}`;
@@ -689,22 +695,22 @@
     function buildDynamicForm(data) {
         const container = document.getElementById('dynamicFormFields');
         container.innerHTML = '';
-        const cols = sheetSchemas[currentSheetName] || [];
+        const cols = sheetColumnMap[currentSheetName] || [];
 
-        cols.forEach(col => {
+        cols.forEach(c => {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-md-6';
-            let val = getCellVal(data, col);
+            let val = getCellVal(data, c.idx);
             
-            if (col.toLowerCase().includes('date') || col === 'ETA') {
+            if (c.title.toLowerCase().includes('date') || c.title === 'ETA') {
                 val = formatDateDisplay(val);
             }
 
             colDiv.innerHTML = `
-                <label class="form-label small fw-bold mb-1">${col}</label>
-                <input type="${col.toLowerCase().includes('date') ? 'date' : 'text'}" 
+                <label class="form-label small fw-bold mb-1">${c.title}</label>
+                <input type="${c.title.toLowerCase().includes('date') ? 'date' : 'text'}" 
                        class="form-control form-control-sm" 
-                       id="input_${col}" 
+                       id="input_col_${c.idx}" 
                        value="${val}">
             `;
             container.appendChild(colDiv);
@@ -717,17 +723,19 @@
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
 
+        const cols = sheetColumnMap[currentSheetName] || [];
+        const cellsPayload = [];
+        cols.forEach(c => {
+            const el = document.getElementById(`input_col_${c.idx}`);
+            cellsPayload.push(el ? el.value : "");
+        });
+
         const payload = {
             action: action,
             sheetName: currentSheetName,
-            rowIndex: rowIndex
+            rowIndex: rowIndex,
+            cells: cellsPayload
         };
-
-        const cols = sheetSchemas[currentSheetName] || [];
-        cols.forEach(col => {
-            const el = document.getElementById(`input_${col}`);
-            payload[col] = el ? el.value : "";
-        });
 
         try {
             await fetch(GAS_API_URL, {
