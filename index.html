@@ -410,33 +410,54 @@
     }
 
     // 核心取值：精確鎖定，若試算表有空格、特殊字元或分詞，直接智慧對齊
-    function getCellVal(row, colName) {
-        if (!row) return '';
-        // 1. 完全精確比對
-        if (row[colName] !== undefined && row[colName] !== null && String(row[colName]).trim() !== '') {
-            return row[colName];
-        }
+   function normalizeKey(str) {
+    return String(str || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+}
 
-        // 2. 嚴格限定的同義欄位比對（絕不跨欄誤抓）
-        const aliases = {
-            'PO #': ['PO', 'PO#', 'PO NO'],
-            'Customer PO#': ['Customer PO', 'Customer PO#', 'Cus PO', 'Cus PO#'],
-            'OC#': ['OC', 'OC#', 'OC NO'],
-            'Cus. Region': ['Cus Region', 'Region'],
-            'Inco-terms': ['Incoterms', 'Inco-terms', 'Inco Terms'],
-            'Goods Received Date': ['Goods Received Date', 'GR Date'],
-            'Selling Price': ['Selling Price', 'Price'],
-            'Total Amount': ['Total Amount', 'Total']
-        };
+function getCellVal(row, colName) {
+    if (!row) return '';
 
-        const targetList = aliases[colName] || [];
-        for (let alias of targetList) {
-            if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== '') {
-                return row[alias];
+    // 1. 先用原本的名稱直接抓
+    if (row[colName] !== undefined && row[colName] !== null && String(row[colName]).trim() !== '') {
+        return row[colName];
+    }
+
+    // 2. 常見別名對照表
+    const aliases = {
+        'Date': ['Date', '日期'],
+        'OC#': ['OC#', 'OC', 'OC NO', 'OC Number', 'OC編號'],
+        'Customer': ['Customer', '客戶', 'Cus', 'Client'],
+        'Customer PO#': ['Customer PO#', 'Customer PO', 'Cus PO', 'Cus PO#', 'PO#', 'PO Number'],
+        'Cus. Region': ['Cus. Region', 'Cus Region', 'Region', '地區'],
+        'Tax Invoice': ['Tax Invoice', 'Tax Invoice#', 'TI', 'Invoice', '發票號碼'],
+        'GUI Receipt': ['GUI Receipt', 'Receipt', '發票'],
+        'Description': ['Description', '品名', '規格', 'Desc'],
+        'QTY': ['QTY', '數量', 'Quantity'],
+        'Status': ['Status', '狀態'],
+        'Currency': ['Currency', '幣別', 'Curr'],
+        'Selling Price': ['Selling Price', 'Price', '單價', '售價'],
+        'VAT': ['VAT', '稅額', '營業稅'],
+        'Total Amount': ['Total Amount', 'Total', '總計', '總金額', 'Amount'],
+        'PAID': ['PAID', '付款', '付款狀態'],
+        'Remark': ['Remark', '備註', 'Note']
+    };
+
+    const targetList = [colName, ...(aliases[colName] || [])];
+    const normalizedTargets = targetList.map(normalizeKey);
+
+    // 3. 掃描 Google Sheet 回傳物件中所有標頭，自動忽略大小寫與空格比對
+    for (let key of Object.keys(row)) {
+        if (key.startsWith('_')) continue;
+        if (normalizedTargets.includes(normalizeKey(key))) {
+            const val = row[key];
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+                return val;
             }
         }
+    }
 
-        return '';
+    return '';
+}
     }
 
     function initApp() {
