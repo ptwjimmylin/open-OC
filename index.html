@@ -375,7 +375,7 @@
     <option value="TSMC 2 BSEM 4">
     <option value="TSMC DEC.">
     <option value="UMC 8C">
-    <option銅 value="UMC 8D">
+    <option value="UMC 8D">
     <option value="UMC 8E">
     <option value="UMC 8F">
     <option value="UMC 8F 8P">
@@ -444,7 +444,7 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 與 Excel 原始檔完全相同的標準表頭定義
+    // 嚴格對照 Excel 原檔的兩大工作表欄位
     const sheetSchemas = {
         "Open PO (TW)": [
             "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
@@ -503,7 +503,7 @@
         return val;
     }
 
-    // 全方位欄位模糊匹配：徹底解決 PO / PO#、Customer PO / Customer PO# 取不到值的問題
+    // 模糊抓取欄位值
     function getRowVal(row, col) {
         if (!row) return '';
         if (row[col] !== undefined && row[col] !== '') return row[col];
@@ -600,7 +600,7 @@
         globalData.forEach(row => {
             const status = String(getRowVal(row, "Status") || "").trim().toLowerCase();
             const ocVal = String(getRowVal(row, "OC#") || "").trim();
-            const amt = parseFloat(getRowVal(row, "Amount") || getRowVal(row, "Total Amount") || getRowVal(row, "Selling Price")) || 0;
+            const amt = parseFloat(getRowVal(row, "Total Amount") || getRowVal(row, "Amount") || getRowVal(row, "Selling Price")) || 0;
 
             if (ocVal !== "") ocCount++;
             if (status !== 'completed' && status !== 'cancelled') {
@@ -703,7 +703,7 @@
 
                 const isNumeric = ['QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'].includes(col);
                 if (isNumeric && typeof val === 'number') {
-                    val = val.toLocaleString();
+                    val = val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
                 }
 
                 rowHtml += `<td class="${isNumeric ? 'text-right' : ''} ${col.toLowerCase().includes('date') ? 'col-date' : ''}">${val}</td>`;
@@ -759,7 +759,7 @@
         renderRows(filtered);
     }
 
-    // 精確匯入：徹底解決雙向欄位比對問題
+    // 匯入 Excel：支援所有欄位完整搬移至後端
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -794,8 +794,8 @@
                                 } else if (typeof v === 'number' && col.toLowerCase().includes('date')) {
                                     v = formatDateDisplay(v);
                                 }
-                                // 同時寫入 PO 與 PO#、OC 與 OC#，確保後端試算表無論哪種名稱都能完全對齊
                                 item[col] = v;
+                                // 容錯映射：雙向附帶
                                 if (col.endsWith('#')) item[col.slice(0, -1)] = v;
                                 else item[col + '#'] = v;
                             });
