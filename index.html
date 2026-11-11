@@ -104,7 +104,7 @@
             border-top: 3px solid #2563eb;
         }
 
-        /* 表格容器：彈性撐滿畫面剩餘高度 */
+        /* 表格容器 */
         .table-panel {
             background: #ffffff;
             border-radius: 0 0 6px 6px;
@@ -156,7 +156,6 @@
             position: relative;
         }
 
-        /* 欄寬調整手把 (Resizer) */
         .col-resizer {
             position: absolute;
             right: 0;
@@ -183,7 +182,6 @@
             white-space: pre-line;
         }
 
-        /* 第一欄 (Date) 寬度控制與可調性 */
         .col-date {
             min-width: 95px;
             width: 100px;
@@ -238,7 +236,6 @@
 <body>
 
 <div class="app-wrapper">
-    <!-- 頂端工具列 -->
     <div class="app-header">
         <div class="app-title">
             <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
@@ -261,7 +258,7 @@
             </button>
 
             <button class="btn btn-outline-danger btn-sm fw-bold px-2" data-bs-toggle="modal" data-bs-target="#clearConfirmModal">
-                <i class="fa-solid fa-trash-arrow-up me-1"></i> 清空
+                <i class="fa-solid fa-trash-arrow-up me-1"></i> 清空當前 Sheet
             </button>
         </div>
     </div>
@@ -346,9 +343,7 @@
                 <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
                     <input type="hidden" id="formAction" value="add">
                     <input type="hidden" id="editingRowIndex" value="">
-                    <div class="row g-2" id="dynamicFormFields">
-                        <!-- 動態依據當前工作表欄位生成輸入項 -->
-                    </div>
+                    <div class="row g-2" id="dynamicFormFields"></div>
                     <div class="text-end mt-3">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
                         <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold" id="submitBtn">儲存寫入</button>
@@ -359,7 +354,7 @@
     </div>
 </div>
 
-<!-- 預置常用項目 DataLists (可隨打字自動過濾，亦可手動輸入新值) -->
+<!-- 下拉選單 DataLists -->
 <datalist id="dl_Supplier">
     <option value="Jesse Technology Pte Ltd">
     <option value="Hootec Electronics Co., Ltd">
@@ -452,16 +447,16 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 依據 Excel 實際欄位定義
+    // 支援 PO 與 PO #、Customer PO 與 Customer PO#
     const sheetSchemas = {
         "Open PO (TW)": [
-            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
+            "Date", "PO", "Supplier", "Customer", "Customer PO", "OC", "Cus. Region", 
             "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
             "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
             "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
         ],
         "Open OC (TW)": [
-            "Date", "OC#", "Customer", "Customer PO#", "Cus. Region", "Tax Invoice", 
+            "Date", "OC", "Customer", "Customer PO", "Cus. Region", "Tax Invoice", 
             "GUI Receipt", "Description", "QTY", "Status", "Currency", "Selling Price", 
             "VAT", "Total Amount", "PAID", "Remark"
         ]
@@ -471,7 +466,7 @@
     let globalData = [];
     let activeFilter = 'ALL';
 
-    // 格式化日期（支援 Excel 序列天數，使用 UTC 運算避免 GMT+8 時差少一天）
+    // 格式化日期
     function formatDateDisplay(val) {
         if (val === undefined || val === null || val === '') return '';
         
@@ -512,6 +507,22 @@
         return val;
     }
 
+    // 智慧取得物件值（容許 PO vs PO #, Customer PO vs Customer PO# 等）
+    function getRowVal(row, col) {
+        if (!row) return '';
+        if (row[col] !== undefined && row[col] !== '') return row[col];
+        if (row[col + '#'] !== undefined && row[col + '#'] !== '') return row[col + '#'];
+        if (col.endsWith('#') && row[col.slice(0, -1)] !== undefined) return row[col.slice(0, -1)];
+        // 去除空格與符號比對
+        const cleanCol = col.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        for (let k in row) {
+            if (k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanCol) {
+                return row[k];
+            }
+        }
+        return '';
+    }
+
     function initApp() {
         renderHeader();
         const cached = localStorage.getItem(`oc_cache_${currentSheetName}`);
@@ -539,7 +550,10 @@
         syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 同步中...`;
 
         try {
-            const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}`, { method: 'GET', redirect: 'follow' });
+            const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}&_t=${new Date().getTime()}`, { 
+                method: 'GET', 
+                redirect: 'follow' 
+            });
             const data = await res.json();
 
             if (Array.isArray(data)) {
@@ -556,7 +570,7 @@
         }
     }
 
-    // 從資料庫 (globalData) 自動搜集過去的紀錄，動態補齊下拉選單項目
+    // 從資料庫歷史紀錄動態更新下拉選單
     function updateDropdownsFromDatabase() {
         if (!Array.isArray(globalData) || globalData.length === 0) return;
 
@@ -569,7 +583,7 @@
             const existingValues = new Set(Array.from(dl.options).map(opt => opt.value.trim().toLowerCase()));
 
             globalData.forEach(row => {
-                const val = row[field];
+                const val = getRowVal(row, field);
                 if (val && typeof val === 'string') {
                     const cleanVal = val.trim();
                     if (cleanVal && !existingValues.has(cleanVal.toLowerCase())) {
@@ -589,9 +603,9 @@
         let openAmount = 0;
 
         globalData.forEach(row => {
-            const status = String(row["Status"] || "").trim().toLowerCase();
-            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
-            const amt = parseFloat(row["Amount"] || row["Total Amount"] || row["Selling Price"]) || 0;
+            const status = String(getRowVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getRowVal(row, "OC") || "").trim();
+            const amt = parseFloat(getRowVal(row, "Amount") || getRowVal(row, "Total Amount") || getRowVal(row, "Selling Price")) || 0;
 
             if (ocVal !== "") confirmedCount++;
             if (status !== 'completed' && status !== 'cancelled') {
@@ -611,14 +625,13 @@
         const headerTr = document.getElementById('tableHeader');
         headerTr.innerHTML = '';
 
-        currentCols.forEach((col, idx) => {
+        currentCols.forEach((col) => {
             const th = document.createElement('th');
             th.textContent = col;
             if (col.toLowerCase().includes('date')) {
                 th.classList.add('col-date');
             }
             
-            // 欄寬拖曳把手
             const resizer = document.createElement('div');
             resizer.classList.add('col-resizer');
             resizer.addEventListener('mousedown', (e) => initColResize(e, th));
@@ -633,7 +646,6 @@
         headerTr.appendChild(actionTh);
     }
 
-    // 欄位拖曳調整大小邏輯
     function initColResize(e, th) {
         e.stopPropagation();
         const startX = e.pageX;
@@ -664,9 +676,9 @@
 
         data.forEach(row => {
             const tr = document.createElement('tr');
-            const rawStatus = String(row["Status"] || "").trim();
+            const rawStatus = String(getRowVal(row, "Status") || "").trim();
             const statusLower = rawStatus.toLowerCase();
-            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
+            const ocVal = String(getRowVal(row, "OC") || "").trim();
             const rowIndex = row["_rowIndex"];
 
             if (statusLower === 'cancelled') {
@@ -675,9 +687,8 @@
 
             let rowHtml = '';
             currentCols.forEach(col => {
-                let val = row[col] !== undefined ? row[col] : (row[col.replace('#', '')] !== undefined ? row[col.replace('#', '')] : '');
+                let val = getRowVal(row, col);
 
-                // 修正所有含 Date 欄位的呈現
                 if (col.toLowerCase().includes('date') || col === 'ETA') {
                     val = formatDateDisplay(val);
                 }
@@ -736,8 +747,8 @@
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
 
         const filtered = globalData.filter(row => {
-            const rawStatus = String(row["Status"] || "").trim().toLowerCase();
-            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
+            const rawStatus = String(getRowVal(row, "Status") || "").trim().toLowerCase();
+            const ocVal = String(getRowVal(row, "OC") || "").trim();
             
             let matchesStatus = true;
             if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
@@ -752,7 +763,7 @@
         renderRows(filtered);
     }
 
-    // 匯入 Excel 支援修復日期
+    // 智慧匯入：支援 PO# 自動對齊 PO、精確分頁
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -761,32 +772,37 @@
         reader.onload = async function(evt) {
             try {
                 const data = new Uint8Array(evt.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true, dateNF: 'yyyy-mm-dd' });
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
                 const syncStatus = document.getElementById('syncStatus');
                 syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
 
                 for (const sheetName of workbook.SheetNames) {
+                    const sLower = sheetName.toLowerCase();
+                    // 只精準匯入包含 po 或 oc 的工作表
+                    let targetSheet = null;
+                    if (sLower.includes("po")) targetSheet = "Open PO (TW)";
+                    else if (sLower.includes("oc")) targetSheet = "Open OC (TW)";
+                    else continue; // 略過 Sheet1、NEW 等其他分頁
+
                     const worksheet = workbook.Sheets[sheetName];
                     const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
                     if (rawRows.length > 0) {
+                        const targetCols = sheetSchemas[targetSheet];
                         const formattedRows = rawRows.map(r => {
                             const item = {};
-                            Object.keys(r).forEach(k => {
-                                let v = r[k];
+                            targetCols.forEach(col => {
+                                let v = getRowVal(r, col);
                                 if (v instanceof Date) {
-                                    v = v.toISOString().split('T')[0];
-                                } else if (typeof v === 'number' && k.toLowerCase().includes('date')) {
+                                    v = formatDateDisplay(v);
+                                } else if (typeof v === 'number' && col.toLowerCase().includes('date')) {
                                     v = formatDateDisplay(v);
                                 }
-                                item[k] = v;
+                                item[col] = v;
                             });
                             return item;
                         });
-
-                        let targetSheet = "Open PO (TW)";
-                        if (sheetName.toLowerCase().includes("oc")) targetSheet = "Open OC (TW)";
 
                         await fetch(GAS_API_URL, {
                             method: 'POST',
@@ -837,7 +853,7 @@
         new bootstrap.Modal(document.getElementById('addOcModal')).show();
     }
 
-    // 建立表單輸入項：自動掛載對應欄位的下拉選項 (datalist)
+    // 動態產生欄位並掛載下拉選單 (datalist)
     function buildDynamicForm(data) {
         const container = document.getElementById('dynamicFormFields');
         container.innerHTML = '';
@@ -846,13 +862,12 @@
         cols.forEach(col => {
             const colDiv = document.createElement('div');
             colDiv.className = 'col-md-6';
-            let val = data[col] !== undefined ? data[col] : (data[col.replace('#','')] !== undefined ? data[col.replace('#','')] : '');
+            let val = getRowVal(data, col);
             
             if (col.toLowerCase().includes('date') || col === 'ETA') {
                 val = formatDateDisplay(val);
             }
 
-            // 檢查該欄位是否有預置或動態產生的 datalist
             const dl = document.getElementById(`dl_${col}`);
             const listAttr = dl ? `list="dl_${col}" placeholder="點擊或輸入選擇..." autocomplete="off"` : '';
 
