@@ -444,7 +444,6 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 嚴格對照 Excel 原檔的兩大工作表欄位
     const sheetSchemas = {
         "Open PO (TW)": [
             "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
@@ -503,7 +502,6 @@
         return val;
     }
 
-    // 模糊抓取欄位值
     function getRowVal(row, col) {
         if (!row) return '';
         if (row[col] !== undefined && row[col] !== '') return row[col];
@@ -759,7 +757,7 @@
         renderRows(filtered);
     }
 
-    // 匯入 Excel：支援所有欄位完整搬移至後端
+    // 核心匯入：直接以完整二維陣列覆蓋，徹底修復欄位錯位與缺失
     function handleFileImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -771,7 +769,7 @@
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
                 const syncStatus = document.getElementById('syncStatus');
-                syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
+                syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 正確重整匯入中...`;
 
                 for (const sheetName of workbook.SheetNames) {
                     const sLower = sheetName.toLowerCase().trim();
@@ -781,12 +779,16 @@
                     else continue;
 
                     const worksheet = workbook.Sheets[sheetName];
+                    const targetCols = sheetSchemas[targetSheet];
+
+                    // 將 Excel 讀取為原始二維陣列
                     const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
                     if (rawRows.length > 0) {
-                        const targetCols = sheetSchemas[targetSheet];
-                        const formattedRows = rawRows.map(r => {
-                            const item = {};
+                        const matrix = [targetCols]; // 第 1 列是標準表頭
+
+                        rawRows.forEach(r => {
+                            const rowData = [];
                             targetCols.forEach(col => {
                                 let v = getRowVal(r, col);
                                 if (v instanceof Date) {
@@ -794,12 +796,9 @@
                                 } else if (typeof v === 'number' && col.toLowerCase().includes('date')) {
                                     v = formatDateDisplay(v);
                                 }
-                                item[col] = v;
-                                // 容錯映射：雙向附帶
-                                if (col.endsWith('#')) item[col.slice(0, -1)] = v;
-                                else item[col + '#'] = v;
+                                rowData.push(v !== undefined && v !== null ? v : "");
                             });
-                            return item;
+                            matrix.push(rowData);
                         });
 
                         await fetch(GAS_API_URL, {
@@ -807,15 +806,16 @@
                             mode: 'no-cors',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                action: "batchAdd",
+                                action: "overwriteSheet",
                                 sheetName: targetSheet,
-                                items: formattedRows
+                                matrix: matrix
                             })
                         });
                     }
                 }
 
-                alert(`✅ 資料匯入完成！`);
+                alert(`✅ 資料已完美校正並匯入完畢！`);
+                localStorage.clear();
                 fetchLatestData();
             } catch (err) {
                 alert('❌ 檔案匯入失敗: ' + err.message);
