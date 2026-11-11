@@ -350,7 +350,7 @@
 <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
 
-    // 依據 Google Sheet 絕對實體欄位定義（完全不理會標題名稱）
+    // 實體欄位順序映射（A欄=0, B欄=1, C欄=2...）
     const sheetColumnMap = {
         "Open PO (TW)": [
             { title: "Date", idx: 0 },
@@ -440,11 +440,24 @@
         return val;
     }
 
-    // 核心取值：直接用陣列索引抓取第幾欄
+    // 核心取值：雙模相容讀取
     function getCellVal(row, colIdx) {
-        if (!row || !row.cells) return '';
-        const val = row.cells[colIdx];
-        return (val !== undefined && val !== null) ? val : '';
+        if (!row) return '';
+
+        // 1. 如果後端傳遞的是 cells 陣列
+        if (Array.isArray(row.cells)) {
+            const v = row.cells[colIdx];
+            return (v !== undefined && v !== null) ? v : '';
+        }
+
+        // 2. 如果後端傳遞的是物件，依鍵值順序讀取
+        const keys = Object.keys(row).filter(k => !k.startsWith('_'));
+        if (keys.length > colIdx) {
+            const v = row[keys[colIdx]];
+            if (v !== undefined && v !== null) return v;
+        }
+
+        return '';
     }
 
     function initApp() {
@@ -484,7 +497,7 @@
                 applyFilters();
                 syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步 (${currentSheetName})`;
             } else {
-                syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-exclamation"></i> 讀取格式錯誤</span>`;
+                syncStatus.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-exclamation"></i> 格式異常</span>`;
             }
         } catch (err) {
             console.error(err);
@@ -497,7 +510,7 @@
         let ocCount = 0;
         let totalAmount = 0;
 
-        const isOC = currentSheetName === 'Open OC (TW)';
+        const isOC = (currentSheetName === 'Open OC (TW)');
         const statusIdx = isOC ? 9 : 10;
         const ocIdx = isOC ? 1 : 5;
         const amtIdx = isOC ? 13 : 14;
@@ -571,7 +584,7 @@
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         const cols = sheetColumnMap[currentSheetName] || [];
-        const statusIdx = currentSheetName === 'Open OC (TW)' ? 9 : 10;
+        const statusIdx = (currentSheetName === 'Open OC (TW)') ? 9 : 10;
 
         data.forEach(row => {
             const tr = document.createElement('tr');
@@ -643,7 +656,7 @@
 
     function applyFilters() {
         const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
-        const isOC = currentSheetName === 'Open OC (TW)';
+        const isOC = (currentSheetName === 'Open OC (TW)');
         const statusIdx = isOC ? 9 : 10;
         const ocIdx = isOC ? 1 : 5;
 
@@ -657,7 +670,8 @@
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
-            let matchesKeyword = (row.cells || []).some(v => String(v).toLowerCase().includes(keyword));
+            const rowValues = Array.isArray(row.cells) ? row.cells : Object.values(row);
+            let matchesKeyword = rowValues.some(v => String(v).toLowerCase().includes(keyword));
             return matchesStatus && matchesKeyword;
         });
 
