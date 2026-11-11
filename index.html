@@ -1,149 +1,1015 @@
-/**
- * 2026 PTW TW - 後端容錯強化版 Google Apps Script
- */
-
-// 安全取得工作表 (忽略大小寫與首尾空格)
-function getSheetSafely(ss, targetName) {
-  var sheets = ss.getSheets();
-  var cleanTarget = targetName.trim().toLowerCase();
-  for (var i = 0; i < sheets.length; i++) {
-    if (sheets[i].getName().trim().toLowerCase() === cleanTarget) {
-      return sheets[i];
-    }
-  }
-  return null;
-}
-
-function doGet(e) {
-  var sheetName = (e && e.parameter && e.parameter.sheetName) ? e.parameter.sheetName : 'Open PO (TW)';
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = getSheetSafely(ss, sheetName);
-
-  if (!sheet) {
-    return ContentService.createTextOutput(JSON.stringify({
-      error: true,
-      message: "找不到工作表: [" + sheetName + "]，請確認試算表分頁名稱！"
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var lastRow = sheet.getLastRow();
-  var lastCol = sheet.getLastColumn();
-  if (lastRow <= 1 || lastCol < 1) {
-    return ContentService.createTextOutput(JSON.stringify([]))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  var headers = data[0];
-  var result = [];
-
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    // 檢查是否整列空白
-    var isBlank = true;
-    for (var k = 0; k < row.length; k++) {
-      if (row[k] !== "" && row[k] !== null && row[k] !== undefined) {
-        isBlank = false;
-        break;
-      }
-    }
-    if (isBlank) continue;
-
-    var rowObj = { _rowIndex: i + 1 };
-    for (var j = 0; j < headers.length; j++) {
-      var header = String(headers[j]).trim();
-      if (!header) continue;
-      
-      var val = row[j];
-      // 日期處理：轉成 yyyy-MM-dd 字串，杜絕時區差一天
-      if (val instanceof Date) {
-        val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      }
-      rowObj[header] = (val !== null && val !== undefined) ? val : "";
-    }
-    result.push(rowObj);
-  }
-
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    var payload = JSON.parse(e.postData.contents);
-    var action = payload.action;
-    var sheetName = payload.sheetName || 'Open PO (TW)';
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = getSheetSafely(ss, sheetName);
-
-    if (!sheet) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "找不到工作表: " + sheetName }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-    if (action === "add") {
-      var newRow = [];
-      for (var i = 0; i < headers.length; i++) {
-        var h = String(headers[i]).trim();
-        newRow.push(payload[h] !== undefined ? payload[h] : "");
-      }
-      sheet.appendRow(newRow);
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === "update") {
-      var rowIndex = parseInt(payload.rowIndex, 10);
-      if (rowIndex > 1) {
-        for (var i = 0; i < headers.length; i++) {
-          var h = String(headers[i]).trim();
-          if (payload[h] !== undefined) {
-            sheet.getRange(rowIndex, i + 1).setValue(payload[h]);
-          }
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 PTW TW_Open OC & PO Management</title>
+    <!-- Bootstrap 5 CSS & FontAwesome Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- SheetJS 處理 Excel 匯入匯出 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary-blue: #0f172a;
+            --accent-blue: #2563eb;
+            --bg-slate: #f1f5f9;
         }
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    }
 
-    if (action === "delete") {
-      var rowIndex = parseInt(payload.rowIndex, 10);
-      if (rowIndex > 1 && rowIndex <= sheet.getLastRow()) {
-        sheet.deleteRow(rowIndex);
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === "clearAll") {
-      var lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        sheet.deleteRows(2, lastRow - 1);
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (action === "batchAdd") {
-      var items = payload.items;
-      if (Array.isArray(items) && items.length > 0) {
-        var rowsToAdd = [];
-        for (var k = 0; k < items.length; k++) {
-          var item = items[k];
-          var rowData = [];
-          for (var c = 0; c < headers.length; c++) {
-            var h = String(headers[c]).trim();
-            rowData.push(item[h] !== undefined ? item[h] : "");
-          }
-          rowsToAdd.push(rowData);
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
+            font-size: 12.5px;
+            background-color: var(--bg-slate);
+            color: #334155;
         }
-        if (rowsToAdd.length > 0) {
-          sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAdd.length, headers.length).setValues(rowsToAdd);
+
+        .app-wrapper {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 8px 14px;
+            box-sizing: border-box;
+            gap: 6px;
         }
-      }
-      return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .app-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary-blue);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Dashboard 卡片 */
+        .stat-card-btn {
+            background: #ffffff;
+            border-radius: 6px;
+            padding: 6px 12px;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            user-select: none;
+            width: 100%;
+            text-align: left;
+        }
+        .stat-card-btn:hover {
+            border-color: #94a3b8;
+            background-color: #f8fafc;
+        }
+        .stat-card-btn.active {
+            border-color: #2563eb !important;
+            background-color: #eff6ff;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+        .stat-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+        }
+        .stat-value {
+            font-size: 17px;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-top: 2px;
+        }
+
+        /* 頁籤 */
+        .sheet-tabs .nav-link {
+            font-weight: 600;
+            font-size: 13px;
+            color: #475569;
+            background-color: #e2e8f0;
+            border-radius: 6px 6px 0 0;
+            padding: 6px 14px;
+            margin-right: 4px;
+            border: 1px solid #cbd5e1;
+            border-bottom: none;
+        }
+        .sheet-tabs .nav-link.active {
+            color: #2563eb;
+            background-color: #ffffff;
+            border-top: 3px solid #2563eb;
+        }
+
+        /* 表格面板 */
+        .table-panel {
+            background: #ffffff;
+            border-radius: 0 0 6px 6px;
+            border: 1px solid #cbd5e1;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .filter-toolbar {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #fafafa;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .table-scroll-container {
+            flex: 1;
+            overflow: auto;
+            position: relative;
+        }
+
+        .excel-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: max-content;
+            min-width: 100%;
+        }
+
+        .excel-table th {
+            background-color: #1e293b !important;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 8px 10px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            border-bottom: 2px solid #0f172a;
+            border-right: 1px solid #334155;
+            user-select: none;
+            position: relative;
+        }
+
+        /* 欄寬調整手把 */
+        .col-resizer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 7px;
+            cursor: col-resize;
+            user-select: none;
+            background-color: transparent;
+        }
+        .col-resizer:hover, .col-resizer.resizing {
+            background-color: #38bdf8;
+        }
+
+        .excel-table td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #f1f5f9;
+            vertical-align: middle;
+            font-size: 12px;
+            line-height: 1.4;
+            max-width: 320px;
+            word-break: break-word;
+            white-space: pre-line;
+        }
+
+        .col-date {
+            min-width: 95px;
+            width: 105px;
+            text-align: center;
+        }
+
+        .excel-table th.col-actions, .excel-table td.col-actions {
+            position: sticky;
+            right: 0;
+            background: #ffffff;
+            z-index: 5;
+            box-shadow: -2px 0 4px rgba(0,0,0,0.06);
+            min-width: 75px;
+            text-align: center;
+        }
+        .excel-table th.col-actions {
+            background-color: #1e293b !important;
+            z-index: 12;
+        }
+
+        .excel-table tbody tr:hover td {
+            background-color: #f1f5f9;
+        }
+        .excel-table tbody tr:hover td.col-actions {
+            background-color: #f1f5f9;
+        }
+
+        .badge-status {
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+        }
+        .badge-open { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .badge-confirmed { background-color: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+        .badge-completed { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .badge-cancelled { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        .row-cancelled td {
+            background-color: #f8fafc !important;
+            color: #94a3b8 !important;
+            text-decoration: line-through;
+        }
+
+        .text-right { text-align: right; }
+    </style>
+</head>
+<body>
+
+<div class="app-wrapper">
+    <!-- 頂端工具列 -->
+    <div class="app-header">
+        <div class="app-title">
+            <i class="fa-solid fa-file-invoice-dollar text-primary"></i>
+            <span>2026 PTW TW_Open OC & PO Management</span>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <small id="syncStatus" class="text-muted me-2"><i class="fa-solid fa-sync fa-spin"></i> 同步中...</small>
+            
+            <button class="btn btn-primary btn-sm fw-bold px-2" onclick="openModalForAdd()">
+                <i class="fa-solid fa-plus me-1"></i> 登記新紀錄
+            </button>
+
+            <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFileImport(event)">
+            <button class="btn btn-outline-secondary btn-sm fw-bold px-2" onclick="document.getElementById('excelFileInput').click()">
+                <i class="fa-solid fa-file-import me-1"></i> 匯入 Excel
+            </button>
+
+            <button class="btn btn-outline-success btn-sm fw-bold px-2" onclick="exportToExcel()">
+                <i class="fa-solid fa-file-excel me-1"></i> 匯出目前 Sheet
+            </button>
+
+            <button class="btn btn-outline-danger btn-sm fw-bold px-2" data-bs-toggle="modal" data-bs-target="#clearConfirmModal">
+                <i class="fa-solid fa-trash-arrow-up me-1"></i> 清空
+            </button>
+        </div>
+    </div>
+
+    <!-- 儀表板卡片 (含年度 PO 收度統計) -->
+    <div class="row g-2 flex-shrink-0">
+        <div class="col-md-2">
+            <button class="stat-card-btn active" id="btnDashALL" onclick="filterByStatus('ALL', this)">
+                <div class="stat-title"><i class="fa-solid fa-list-check me-1"></i> 顯示總筆數</div>
+                <div class="stat-value text-dark" id="statTotal">0</div>
+            </button>
+        </div>
+        <div class="col-md-2">
+            <button class="stat-card-btn" id="btnDashOPEN" style="border-left: 4px solid #f59e0b;" onclick="filterByStatus('OPEN', this)">
+                <div class="stat-title"><i class="fa-solid fa-clock me-1 text-warning"></i> Open 未結案筆數</div>
+                <div class="stat-value text-warning" id="statOpen">0</div>
+            </button>
+        </div>
+        <div class="col-md-2">
+            <button class="stat-card-btn" id="btnDashCONFIRMED" style="border-left: 4px solid #0284c7;" onclick="filterByStatus('CONFIRMED', this)">
+                <div class="stat-title"><i class="fa-solid fa-file-circle-check me-1 text-info"></i> 已做 OC</div>
+                <div class="stat-value text-info" id="statConfirmed">0</div>
+            </button>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card-btn" style="border-left: 4px solid #10b981; cursor: default;">
+                <div class="stat-title"><i class="fa-solid fa-hand-holding-dollar me-1 text-success"></i> 年度 PO 總額 (USD)</div>
+                <div class="stat-value text-success" id="statTotalAmount">$0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card-btn" style="border-left: 4px solid #8b5cf6; cursor: default;">
+                <div class="stat-title d-flex justify-content-between">
+                    <span><i class="fa-solid fa-chart-line me-1 text-primary"></i> PO 結案收度 (達成率)</span>
+                    <span id="statReceiptRate" class="badge bg-primary text-white">0%</span>
+                </div>
+                <div class="stat-value text-primary" id="statCompletedAmount">$0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工作表頁籤 -->
+    <ul class="nav nav-tabs sheet-tabs flex-shrink-0" id="sheetTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="tab-po" onclick="switchSheet('Open PO (TW)')">
+                <i class="fa-solid fa-file-invoice me-1"></i> Open PO (TW)
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-oc" onclick="switchSheet('Open OC (TW)')">
+                <i class="fa-solid fa-file-signature me-1"></i> Open OC (TW)
+            </button>
+        </li>
+    </ul>
+
+    <!-- 主要表格面板 -->
+    <div class="table-panel">
+        <div class="filter-toolbar">
+            <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active" id="btnFilterALL" onclick="filterByStatus('ALL', this)">全部</button>
+                <button type="button" class="btn btn-outline-warning" id="btnFilterOPEN" onclick="filterByStatus('OPEN', this)">🔥 Open</button>
+                <button type="button" class="btn btn-outline-info" id="btnFilterCONFIRMED" onclick="filterByStatus('CONFIRMED', this)">☑️ 已做 OC</button>
+                <button type="button" class="btn btn-outline-success" id="btnFilterCOMPLETED" onclick="filterByStatus('COMPLETED', this)">✅ 已完成</button>
+                <button type="button" class="btn btn-outline-danger" id="btnFilterCANCELLED" onclick="filterByStatus('CANCELLED', this)">❌ 已取消</button>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small">年度:</span>
+                    <select id="yearFilter" class="form-select form-select-sm" style="width: 100px;" onchange="applyFilters()">
+                        <option value="ALL" selected>全部年度</option>
+                        <option value="2026">2026</option>
+                        <option value="2025">2025</option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small">客戶:</span>
+                    <select id="customerFilter" class="form-select form-select-sm" style="width: 125px;" onchange="applyFilters()">
+                        <option value="ALL">全部客戶</option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small">供應商:</span>
+                    <select id="supplierFilter" class="form-select form-select-sm" style="width: 125px;" onchange="applyFilters()">
+                        <option value="ALL">全部供應商</option>
+                    </select>
+                </div>
+
+                <input type="text" id="searchInput" class="form-control form-control-sm" style="width: 160px;" placeholder="🔍 快速搜尋...">
+            </div>
+        </div>
+
+        <div class="table-scroll-container">
+            <table class="excel-table" id="mainTable">
+                <thead><tr id="tableHeader"></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 預置選單 DataLists -->
+<datalist id="list_Supplier">
+    <option value="Jesse Technology Pte Ltd">
+    <option value="Hootec Electronics Co., Ltd">
+    <option value="WUXI ZHUOHAI TECHNOLOGY CO.,LTD">
+    <option value="HS HI-TECH Co.,Ltd.">
+    <option value="QTS Corporation">
+    <option value="Cyun Chen Technology Co., Ltd">
+    <option value="ANTS應用奈米科技股份有限公司">
+    <option value="TSMC">
+</datalist>
+
+<datalist id="list_Customer">
+    <option value="TSMC 3">
+    <option value="TSMC 5">
+    <option value="TSMC 8">
+    <option value="TSMC 12P1">
+    <option value="TSMC 15B">
+    <option value="TSMC 2 5">
+    <option value="TSMC 2 BSEM 4">
+    <option value="TSMC DEC.">
+    <option value="UMC 8C">
+    <option value="UMC 8D">
+    <option value="UMC 8E">
+    <option value="UMC 8F">
+    <option value="UMC 8F 8P">
+    <option value="UMC 8S">
+    <option value="UMC DEC.">
+    <option value="Mosel">
+</datalist>
+
+<datalist id="list_Currency">
+    <option value="USD">
+    <option value="TWD">
+    <option value="EUR">
+    <option value="JPY">
+</datalist>
+
+<datalist id="list_Inco_terms">
+    <option value="EXW">
+    <option value="EXW Korea">
+    <option value="FOB">
+    <option value="CIF">
+    <option value="DDP">
+    <option value="NA">
+</datalist>
+
+<datalist id="list_Status">
+    <option value="Open">
+    <option value="PO Sent">
+    <option value="Completed">
+    <option value="Cancelled">
+    <option value="Partial Shipment">
+    <option value="Pending Payment">
+</datalist>
+
+<!-- 新增/編輯 Modal -->
+<div class="modal fade" id="addOcModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white py-2">
+                <h6 class="modal-title fw-bold" id="modalTitle"><i class="fa-solid fa-pen-to-square me-2"></i>登記資料</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ocForm" onsubmit="event.preventDefault(); submitOCData();">
+                    <input type="hidden" id="formAction" value="add">
+                    <input type="hidden" id="editingRowIndex" value="">
+                    <div class="row g-2" id="dynamicFormFields"></div>
+                    <div class="text-end mt-3">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary btn-sm px-3 fw-bold" id="submitBtn">儲存寫入</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 清空確認 Modal -->
+<div class="modal fade" id="clearConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white py-2">
+                <h6 class="modal-title fw-bold">清空確認</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center py-3">
+                <p class="mb-0 text-muted">確定要清空當前工作表所有資料嗎？</p>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="clearCurrentSheet()">確定清空</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
+
+    const sheetSchemas = {
+        "Open PO (TW)": [
+            "Date", "PO #", "Supplier", "Customer", "Customer PO#", "OC#", "Cus. Region", 
+            "Description", "QTY", "ETA", "Status", "Inco-terms", "Currency", "Unit Price", 
+            "Amount", "Created by", "Remark", "Goods Received Date", "Inv Date", 
+            "Supplier Inv", "Payment Terms", "Received Cus Exchg Parts"
+        ],
+        "Open OC (TW)": [
+            "Date", "OC#", "Customer", "Customer PO#", "Cus. Region", "Tax Invoice", 
+            "GUI Receipt", "Description", "QTY", "Status", "Currency", "Selling Price", 
+            "VAT", "Total Amount", "PAID", "Remark"
+        ]
+    };
+
+    let currentSheetName = 'Open PO (TW)';
+    let globalData = [];
+    let activeFilter = 'ALL';
+
+    // 解決日期差一天問題的核心轉換函式 (使用 UTC 避免時區扣除一天)
+    function formatDateDisplay(val) {
+        if (val === undefined || val === null || val === '') return '';
+
+        // 1. 純數字處理 (Excel 序列天數)
+        if (typeof val === 'number' && val > 20000 && val < 70000) {
+            const excelEpochUTC = Date.UTC(1899, 11, 30);
+            const d = new Date(excelEpochUTC + Math.round(val) * 86400000);
+            const y = d.getUTCFullYear();
+            const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        // 2. Date 物件 (直接取 Local 年月日)
+        if (val instanceof Date && !isNaN(val)) {
+            const y = val.getFullYear();
+            const m = String(val.getMonth() + 1).padStart(2, '0');
+            const day = String(val.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+
+        // 3. 字串格式
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (/^\d{5}$/.test(trimmed)) {
+                const num = parseInt(trimmed, 10);
+                const excelEpochUTC = Date.UTC(1899, 11, 30);
+                const d = new Date(excelEpochUTC + num * 86400000);
+                const y = d.getUTCFullYear();
+                const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            }
+            if (trimmed.includes('T')) {
+                return trimmed.split('T')[0];
+            }
+            if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}/.test(trimmed)) {
+                const parts = trimmed.split(/[\/\-\.]/);
+                const y = parts[0];
+                const m = parts[1].padStart(2, '0');
+                const day = parts[2].split(' ')[0].padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            }
+        }
+        return val;
     }
 
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+    function initApp() {
+        renderHeader();
+        const cached = localStorage.getItem(`oc_cache_${currentSheetName}`);
+        if (cached) {
+            try {
+                globalData = JSON.parse(cached);
+                populateFilterOptions();
+                applyFilters();
+            } catch (e) {}
+        }
+        fetchLatestData();
+    }
+
+    function switchSheet(sheetName) {
+        currentSheetName = sheetName;
+        document.querySelectorAll('.sheet-tabs .nav-link').forEach(btn => btn.classList.remove('active'));
+        if (sheetName === 'Open PO (TW)') document.getElementById('tab-po').classList.add('active');
+        if (sheetName === 'Open OC (TW)') document.getElementById('tab-oc').classList.add('active');
+        initApp();
+    }
+
+    async function fetchLatestData() {
+        const syncStatus = document.getElementById('syncStatus');
+        syncStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin text-primary"></i> 同步中...`;
+
+        try {
+            const res = await fetch(`${GAS_API_URL}?sheetName=${encodeURIComponent(currentSheetName)}`, { method: 'GET', redirect: 'follow' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            if (Array.isArray(data)) {
+                globalData = data;
+                localStorage.setItem(`oc_cache_${currentSheetName}`, JSON.stringify(data));
+                populateFilterOptions();
+                applyFilters();
+                syncStatus.innerHTML = `<i class="fa-solid fa-check text-success"></i> 已同步`;
+            } else {
+                throw new Error(data.message || "回傳格式非陣列");
+            }
+        } catch (err) {
+            console.error("GAS 連線失敗:", err);
+            syncStatus.innerHTML = `<span class="text-danger" title="${err.message}"><i class="fa-solid fa-circle-exclamation"></i> 同步失敗</span>`;
+            if (globalData.length === 0) {
+                renderRows([]);
+            }
+        }
+    }
+
+    function populateFilterOptions() {
+        const cusSet = new Set();
+        const supSet = new Set();
+
+        globalData.forEach(row => {
+            const cus = String(row['Customer'] || '').trim();
+            const sup = String(row['Supplier'] || '').trim();
+            if (cus) cusSet.add(cus);
+            if (sup) supSet.add(sup);
+        });
+
+        const cusSelect = document.getElementById('customerFilter');
+        const currentCusVal = cusSelect.value;
+        cusSelect.innerHTML = '<option value="ALL">全部客戶</option>';
+        Array.from(cusSet).sort().forEach(c => {
+            cusSelect.innerHTML += `<option value="${c}" ${c === currentCusVal ? 'selected' : ''}>${c}</option>`;
+        });
+
+        const supSelect = document.getElementById('supplierFilter');
+        const currentSupVal = supSelect.value;
+        supSelect.innerHTML = '<option value="ALL">全部供應商</option>';
+        Array.from(supSet).sort().forEach(s => {
+            supSelect.innerHTML += `<option value="${s}" ${s === currentSupVal ? 'selected' : ''}>${s}</option>`;
+        });
+
+        const supDatalist = document.getElementById('list_Supplier');
+        supSet.forEach(s => {
+            if (!supDatalist.querySelector(`option[value="${s}"]`)) {
+                supDatalist.innerHTML += `<option value="${s}">`;
+            }
+        });
+
+        const cusDatalist = document.getElementById('list_Customer');
+        cusSet.forEach(c => {
+            if (!cusDatalist.querySelector(`option[value="${c}"]`)) {
+                cusDatalist.innerHTML += `<option value="${c}">`;
+            }
+        });
+    }
+
+    function updateDashboard(dataset) {
+        let openCount = 0;
+        let confirmedCount = 0;
+        let totalAmount = 0;
+        let completedAmount = 0;
+
+        dataset.forEach(row => {
+            const status = String(row["Status"] || "").trim().toLowerCase();
+            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
+            const amt = parseFloat(row["Amount"] || row["Total Amount"] || row["Selling Price"]) || 0;
+
+            totalAmount += amt;
+
+            if (ocVal !== "") confirmedCount++;
+            if (status !== 'completed' && status !== 'cancelled') {
+                openCount++;
+            }
+            if (status === 'completed' || row["Goods Received Date"]) {
+                completedAmount += amt;
+            }
+        });
+
+        const rate = totalAmount > 0 ? ((completedAmount / totalAmount) * 100).toFixed(1) : 0;
+
+        document.getElementById('statTotal').innerText = dataset.length;
+        document.getElementById('statOpen').innerText = openCount;
+        document.getElementById('statConfirmed').innerText = confirmedCount;
+        document.getElementById('statTotalAmount').innerText = '$' + totalAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+        document.getElementById('statCompletedAmount').innerText = '$' + completedAmount.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+        document.getElementById('statReceiptRate').innerText = `${rate}% 收度`;
+    }
+
+    function renderHeader() {
+        const currentCols = sheetSchemas[currentSheetName] || [];
+        const headerTr = document.getElementById('tableHeader');
+        headerTr.innerHTML = '';
+
+        currentCols.forEach((col) => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            if (col.toLowerCase().includes('date')) {
+                th.classList.add('col-date');
+            }
+            
+            const resizer = document.createElement('div');
+            resizer.classList.add('col-resizer');
+            resizer.addEventListener('mousedown', (e) => initColResize(e, th));
+            th.appendChild(resizer);
+
+            headerTr.appendChild(th);
+        });
+
+        const actionTh = document.createElement('th');
+        actionTh.className = 'col-actions';
+        actionTh.textContent = '操作';
+        headerTr.appendChild(actionTh);
+    }
+
+    function initColResize(e, th) {
+        e.stopPropagation();
+        const startX = e.pageX;
+        const startWidth = th.offsetWidth;
+        const resizer = e.target;
+        resizer.classList.add('resizing');
+
+        function onMouseMove(ev) {
+            const newWidth = Math.max(50, startWidth + (ev.pageX - startX));
+            th.style.width = newWidth + 'px';
+            th.style.minWidth = newWidth + 'px';
+        }
+
+        function onMouseUp() {
+            resizer.classList.remove('resizing');
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        }
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    }
+
+    function renderRows(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        const currentCols = sheetSchemas[currentSheetName] || [];
+
+        if (!data || data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${currentCols.length + 1}" class="text-center py-4 text-muted"><i class="fa-solid fa-inbox me-2"></i>查無資料 (請確認年度/篩選條件或等待資料同步)</td></tr>`;
+            return;
+        }
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            const rawStatus = String(row["Status"] || "").trim();
+            const statusLower = rawStatus.toLowerCase();
+            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
+            const rowIndex = row["_rowIndex"];
+
+            if (statusLower === 'cancelled') {
+                tr.classList.add('row-cancelled');
+            }
+
+            let rowHtml = '';
+            currentCols.forEach(col => {
+                let val = row[col] !== undefined ? row[col] : (row[col.replace('#', '')] !== undefined ? row[col.replace('#', '')] : '');
+
+                if (col.toLowerCase().includes('date') || col === 'ETA') {
+                    val = formatDateDisplay(val);
+                }
+
+                if (col === 'Status') {
+                    if (statusLower === 'completed') {
+                        val = `<span class="badge-status badge-completed"><i class="fa-solid fa-check"></i> Completed</span>`;
+                    } else if (statusLower === 'cancelled') {
+                        val = `<span class="badge-status badge-cancelled"><i class="fa-solid fa-xmark"></i> Cancelled</span>`;
+                    } else if (ocVal !== '') {
+                        val = `<span class="badge-status badge-confirmed"><i class="fa-solid fa-file-circle-check"></i> Confirmed</span>`;
+                    } else {
+                        val = `<span class="badge-status badge-open"><i class="fa-solid fa-clock"></i> Open</span>`;
+                    }
+                }
+
+                const isNumeric = ['QTY', 'Unit Price', 'Amount', 'Selling Price', 'Total Amount', 'VAT'].includes(col);
+                if (isNumeric && typeof val === 'number') {
+                    val = val.toLocaleString();
+                }
+
+                rowHtml += `<td class="${isNumeric ? 'text-right' : ''} ${col.toLowerCase().includes('date') ? 'col-date' : ''}">${val}</td>`;
+            });
+
+            const encodedRow = encodeURIComponent(JSON.stringify(row));
+            rowHtml += `
+                <td class="col-actions">
+                    <button class="btn btn-outline-primary btn-sm py-0 px-1 me-1" onclick="openModalForEdit('${encodedRow}')" title="編輯">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteRow(${rowIndex})" title="刪除">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </td>
+            `;
+
+            tr.innerHTML = rowHtml;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function filterByStatus(type, btn) {
+        activeFilter = type;
+        document.querySelectorAll('.stat-card-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+
+        const dashBtn = document.getElementById(`btnDash${type}`);
+        const filterBtn = document.getElementById(`btnFilter${type}`);
+        if (dashBtn) dashBtn.classList.add('active');
+        if (filterBtn) filterBtn.classList.add('active');
+
+        applyFilters();
+    }
+
+    function applyFilters() {
+        const keyword = document.getElementById('searchInput').value.toLowerCase().trim();
+        const selectedYear = document.getElementById('yearFilter').value;
+        const selectedCustomer = document.getElementById('customerFilter').value;
+        const selectedSupplier = document.getElementById('supplierFilter').value;
+
+        const filtered = globalData.filter(row => {
+            const rawStatus = String(row["Status"] || "").trim().toLowerCase();
+            const ocVal = String(row["OC#"] || row["OC"] || "").trim();
+            const rowDate = formatDateDisplay(row["Date"] || "");
+            const rowCus = String(row["Customer"] || "").trim();
+            const rowSup = String(row["Supplier"] || "").trim();
+            
+            let matchesStatus = true;
+            if (activeFilter === 'OPEN') matchesStatus = (rawStatus !== 'completed' && rawStatus !== 'cancelled');
+            if (activeFilter === 'CONFIRMED') matchesStatus = (ocVal !== "");
+            if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
+            if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
+
+            let matchesYear = true;
+            if (selectedYear !== 'ALL') {
+                matchesYear = rowDate.startsWith(selectedYear);
+            }
+
+            let matchesCustomer = true;
+            if (selectedCustomer !== 'ALL') {
+                matchesCustomer = (rowCus === selectedCustomer);
+            }
+
+            let matchesSupplier = true;
+            if (selectedSupplier !== 'ALL') {
+                matchesSupplier = (rowSup === selectedSupplier);
+            }
+
+            let matchesKeyword = Object.values(row).some(v => String(v).toLowerCase().includes(keyword));
+
+            return matchesStatus && matchesYear && matchesCustomer && matchesSupplier && matchesKeyword;
+        });
+
+        updateDashboard(filtered);
+        renderRows(filtered);
+    }
+
+    function handleFileImport(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(evt) {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+
+                const syncStatus = document.getElementById('syncStatus');
+                syncStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin text-primary"></i> 匯入中...`;
+
+                for (const sheetName of workbook.SheetNames) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (rawRows.length > 0) {
+                        const formattedRows = rawRows.map(r => {
+                            const item = {};
+                            Object.keys(r).forEach(k => {
+                                let v = r[k];
+                                if (v instanceof Date) {
+                                    v = formatDateDisplay(v);
+                                } else if (typeof v === 'number' && k.toLowerCase().includes('date')) {
+                                    v = formatDateDisplay(v);
+                                }
+                                item[k] = v;
+                            });
+                            return item;
+                        });
+
+                        let targetSheet = "Open PO (TW)";
+                        if (sheetName.toLowerCase().includes("oc")) targetSheet = "Open OC (TW)";
+
+                        await fetch(GAS_API_URL, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                action: "batchAdd",
+                                sheetName: targetSheet,
+                                items: formattedRows
+                            })
+                        });
+                    }
+                }
+
+                alert(`✅ 資料匯入完成！`);
+                fetchLatestData();
+            } catch (err) {
+                alert('❌ 檔案匯入失敗: ' + err.message);
+            } finally {
+                document.getElementById('excelFileInput').value = "";
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function exportToExcel() {
+        const currentCols = sheetSchemas[currentSheetName] || [];
+        const worksheet = XLSX.utils.json_to_sheet(globalData, { header: currentCols });
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, currentSheetName);
+        XLSX.writeFile(workbook, `${currentSheetName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    function openModalForAdd() {
+        buildDynamicForm({});
+        document.getElementById('formAction').value = "add";
+        document.getElementById('editingRowIndex').value = "";
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-plus me-2"></i>登記至 ${currentSheetName}`;
+        new bootstrap.Modal(document.getElementById('addOcModal')).show();
+    }
+
+    function openModalForEdit(encodedRowData) {
+        const row = JSON.parse(decodeURIComponent(encodedRowData));
+        buildDynamicForm(row);
+        document.getElementById('formAction').value = "update";
+        document.getElementById('editingRowIndex').value = row._rowIndex;
+        document.getElementById('modalTitle').innerHTML = `<i class="fa-solid fa-pen-to-square me-2"></i>編輯紀錄 (Row #${row._rowIndex})`;
+        new bootstrap.Modal(document.getElementById('addOcModal')).show();
+    }
+
+    function buildDynamicForm(data) {
+        const container = document.getElementById('dynamicFormFields');
+        container.innerHTML = '';
+        const cols = sheetSchemas[currentSheetName] || [];
+
+        cols.forEach(col => {
+            const colDiv = document.createElement('div');
+            colDiv.className = 'col-md-6';
+            let val = data[col] !== undefined ? data[col] : (data[col.replace('#','')] !== undefined ? data[col.replace('#','')] : '');
+            
+            if (col.toLowerCase().includes('date') || col === 'ETA') {
+                val = formatDateDisplay(val);
+            }
+
+            let listAttr = '';
+            if (col === 'Supplier') listAttr = 'list="list_Supplier"';
+            else if (col === 'Customer') listAttr = 'list="list_Customer"';
+            else if (col === 'Currency') listAttr = 'list="list_Currency"';
+            else if (col === 'Inco-terms') listAttr = 'list="list_Inco_terms"';
+            else if (col === 'Status') listAttr = 'list="list_Status"';
+
+            const isDate = col.toLowerCase().includes('date') || col === 'ETA';
+
+            colDiv.innerHTML = `
+                <label class="form-label small fw-bold mb-1">${col}</label>
+                <input type="${isDate ? 'date' : 'text'}" 
+                       class="form-control form-control-sm" 
+                       id="input_${col}" 
+                       value="${val}" 
+                       ${listAttr}
+                       ${listAttr ? 'placeholder="點擊或輸入選擇..." autocomplete="off"' : ''}>
+            `;
+            container.appendChild(colDiv);
+        });
+    }
+
+    async function submitOCData() {
+        const action = document.getElementById('formAction').value;
+        const rowIndex = document.getElementById('editingRowIndex').value;
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+
+        const payload = {
+            action: action,
+            sheetName: currentSheetName,
+            rowIndex: rowIndex
+        };
+
+        const cols = sheetSchemas[currentSheetName] || [];
+        cols.forEach(col => {
+            const el = document.getElementById(`input_${col}`);
+            payload[col] = el ? el.value : "";
+        });
+
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            bootstrap.Modal.getInstance(document.getElementById('addOcModal')).hide();
+            fetchLatestData();
+        } catch (err) {
+            alert('❌ 儲存失敗: ' + err.message);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    async function deleteRow(rowIndex) {
+        if (!confirm(`確定要刪除第 #${rowIndex} 列資料？`)) return;
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "delete", sheetName: currentSheetName, rowIndex: rowIndex })
+            });
+            fetchLatestData();
+        } catch (err) {
+            alert('❌ 刪除失敗');
+        }
+    }
+
+    async function clearCurrentSheet() {
+        bootstrap.Modal.getInstance(document.getElementById('clearConfirmModal')).hide();
+        try {
+            await fetch(GAS_API_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: "clearAll", sheetName: currentSheetName })
+            });
+            fetchLatestData();
+        } catch (err) {
+            alert('❌ 清空失敗');
+        }
+    }
+
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    initApp();
+</script>
+</body>
+</html>
