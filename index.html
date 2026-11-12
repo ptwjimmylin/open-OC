@@ -458,7 +458,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwnC6-44LKMN4OL914yVYj3oR35lFptZNo5tamOZzLYR1XcRNiw1m4e7-MBo9ZqkhhD/exec";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxoCmiukzL8rJUq0MtFpLTi56bf-OPvUq8xivgLRhpJ2suuVGv6wswRsuAyB2OX3ZhUjQ/exec";
 
     const sheetColumnMap = {
         "Open PO (TW)": [
@@ -1059,7 +1059,7 @@
         });
     }
 
-    // 寫入與更新資料（加入 1.2 秒延遲等待試算表寫入完成後重新抓取）
+    // 寫入與更新資料（使用 text/plain 繞過 CORS，自動重設篩選並捲動至最底部查看）
     async function submitOCData() {
         const action = document.getElementById('formAction').value;
         const rowIndex = document.getElementById('editingRowIndex').value;
@@ -1084,16 +1084,26 @@
             await fetch(GAS_API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
             });
 
             bootstrap.Modal.getInstance(document.getElementById('addOcModal')).hide();
             document.getElementById('syncStatus').innerHTML = `<i class="fa-solid fa-sync fa-spin text-warning"></i> 寫入同步中...`;
             
-            setTimeout(() => {
-                fetchLatestData();
-            }, 1200);
+            // 重設篩選確保新資料可見
+            selectedYear = 'ALL';
+            const yearSel = document.getElementById('yearSelect');
+            if (yearSel) yearSel.value = 'ALL';
+            filterByStatus('ALL');
+
+            setTimeout(async () => {
+                await fetchLatestData();
+                if (action === 'add') {
+                    const container = document.querySelector('.table-scroll-container');
+                    if (container) container.scrollTop = container.scrollHeight;
+                }
+            }, 1500);
         } catch (err) {
             alert('❌ 儲存失敗: ' + err.message);
         } finally {
@@ -1101,21 +1111,21 @@
         }
     }
 
-    // 刪除資料（加入 1 秒延遲同步更新）
+    // 刪除資料（使用 text/plain 繞過 CORS，1.2 秒後自動重新整理）
     async function deleteRow(rowIndex) {
         if (!confirm(`確定要刪除第 #${rowIndex} 列資料？`)) return;
         try {
             await fetch(GAS_API_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ action: "delete", sheetName: currentSheetName, rowIndex: rowIndex })
             });
 
             document.getElementById('syncStatus').innerHTML = `<i class="fa-solid fa-sync fa-spin text-warning"></i> 刪除同步中...`;
             setTimeout(() => {
                 fetchLatestData();
-            }, 1000);
+            }, 1200);
         } catch (err) {
             alert('❌ 刪除失敗');
         }
