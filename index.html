@@ -508,7 +508,7 @@
     let currentSheetName = 'Open OC (TW)';
     let globalData = [];
     let activeFilter = 'ALL';
-    let selectedYear = 'ALL'; // 目前選取年度
+    let selectedYear = 'ALL';
 
     function loadSavedSettings() {
         const savedFontSize = localStorage.getItem('ptw_modal_font_size') || '14.5';
@@ -557,7 +557,7 @@
             localStorage.removeItem(`ptw_colwidth_${currentSheetName}_${c.title}`);
         });
         renderHeader();
-        renderRows(globalData);
+        applyFilters();
     }
 
     function formatDateDisplay(val) {
@@ -661,14 +661,13 @@
         }
     }
 
-    // 動態掃描資料提取所有年份並更新年度下拉選單與對比表
     function populateYearOptions() {
         const yearSelect = document.getElementById('yearSelect');
         const prevVal = yearSelect.value;
         const yearsSet = new Set();
 
         globalData.forEach(row => {
-            const rawDate = String(getCellVal(row, 0) || '').trim(); // 0 = Date
+            const rawDate = String(getCellVal(row, 0) || '').trim();
             const match = rawDate.match(/^(\d{4})/);
             if (match) {
                 yearsSet.add(match[1]);
@@ -708,7 +707,6 @@
         onYearChange(y);
     }
 
-    // 渲染歷年數據對比表
     function renderYearSummaryTable(sortedYears) {
         const tbody = document.getElementById('yearSummaryTableBody');
         tbody.innerHTML = '';
@@ -775,7 +773,6 @@
         const amtIdx = isOC ? 13 : 14;
 
         globalData.forEach(row => {
-            // 年度篩選
             const rawDate = String(getCellVal(row, 0) || '').trim();
             if (selectedYear !== 'ALL' && !rawDate.startsWith(selectedYear)) {
                 return;
@@ -934,13 +931,11 @@
         const ocIdx = isOC ? 1 : 5;
 
         const filtered = globalData.filter(row => {
-            // 1. 年度過濾
             const rawDate = String(getCellVal(row, 0) || '').trim();
             if (selectedYear !== 'ALL' && !rawDate.startsWith(selectedYear)) {
                 return false;
             }
 
-            // 2. 狀態過濾
             const rawStatus = String(getCellVal(row, statusIdx) || "").trim().toLowerCase();
             const ocVal = String(getCellVal(row, ocIdx) || "").trim();
             
@@ -950,7 +945,6 @@
             if (activeFilter === 'COMPLETED') matchesStatus = (rawStatus === 'completed');
             if (activeFilter === 'CANCELLED') matchesStatus = (rawStatus === 'cancelled');
 
-            // 3. 關鍵字搜尋
             const rowValues = Array.isArray(row.cells) ? row.cells : Object.values(row);
             let matchesKeyword = rowValues.some(v => String(v).toLowerCase().includes(keyword));
             return matchesStatus && matchesKeyword;
@@ -1065,6 +1059,7 @@
         });
     }
 
+    // 寫入與更新資料（加入 1.2 秒延遲等待試算表寫入完成後重新抓取）
     async function submitOCData() {
         const action = document.getElementById('formAction').value;
         const rowIndex = document.getElementById('editingRowIndex').value;
@@ -1094,7 +1089,11 @@
             });
 
             bootstrap.Modal.getInstance(document.getElementById('addOcModal')).hide();
-            fetchLatestData();
+            document.getElementById('syncStatus').innerHTML = `<i class="fa-solid fa-sync fa-spin text-warning"></i> 寫入同步中...`;
+            
+            setTimeout(() => {
+                fetchLatestData();
+            }, 1200);
         } catch (err) {
             alert('❌ 儲存失敗: ' + err.message);
         } finally {
@@ -1102,6 +1101,7 @@
         }
     }
 
+    // 刪除資料（加入 1 秒延遲同步更新）
     async function deleteRow(rowIndex) {
         if (!confirm(`確定要刪除第 #${rowIndex} 列資料？`)) return;
         try {
@@ -1111,7 +1111,11 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: "delete", sheetName: currentSheetName, rowIndex: rowIndex })
             });
-            fetchLatestData();
+
+            document.getElementById('syncStatus').innerHTML = `<i class="fa-solid fa-sync fa-spin text-warning"></i> 刪除同步中...`;
+            setTimeout(() => {
+                fetchLatestData();
+            }, 1000);
         } catch (err) {
             alert('❌ 刪除失敗');
         }
